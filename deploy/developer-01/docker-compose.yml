@@ -1,3 +1,8 @@
+# Explicit project name keeps this stack isolated from the developer-01
+# Odoo/n8n stack, which otherwise share the "developer-01" project namespace
+# (derived from the compose file's parent directory) and the same network.
+name: wa-gateway-developer-01
+
 services:
   gateway-api:
     build:
