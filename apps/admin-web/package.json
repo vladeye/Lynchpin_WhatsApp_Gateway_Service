@@ -13,11 +13,13 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.59.0",
+    "qrcode.react": "^4.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^6.27.0"
   },
   "devDependencies": {
+    "@lynchpin-whatsapp-gateway/shared-types": "workspace:*",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.0.1",
     "@types/react": "^19.0.0",

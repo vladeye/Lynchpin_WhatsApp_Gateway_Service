@@ -4,6 +4,23 @@
 name: lynchpin-whatsapp-gateway-developer-01
 
 services:
+  db:
+    image: postgres:16
+    container_name: lynchpin-whatsapp-gateway-developer-01-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gateway
+      POSTGRES_DB: gateway
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gateway -d gateway"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   gateway-api:
     build:
       context: ../..
@@ -11,6 +28,9 @@ services:
     image: lynchpin-whatsapp-gateway:developer-01
     container_name: lynchpin-whatsapp-gateway-developer-01
     restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
     env_file:
       - .env
     ports:
