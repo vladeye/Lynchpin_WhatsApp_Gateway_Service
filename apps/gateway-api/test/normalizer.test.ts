@@ -3,7 +3,7 @@ import {
   EVENT_MESSAGE_RECEIVED,
   EVENT_MESSAGE_UNSUPPORTED,
   GatewayEventSchema,
-} from "@wa-gateway/shared-types";
+} from "@lynchpin-whatsapp-gateway/shared-types";
 import {
   dedupKey,
   normalizeInbound,

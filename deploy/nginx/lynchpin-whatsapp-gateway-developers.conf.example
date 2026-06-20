@@ -1,6 +1,6 @@
 # Reverse proxy for the WhatsApp Gateway on developer-01.
 # Mirrors the appointment-developers pattern. Copy to
-# /etc/nginx/sites-available/wa-gateway, symlink into sites-enabled, then run
+# /etc/nginx/sites-available/lynchpin-whatsapp-gateway, symlink into sites-enabled, then run
 # `certbot --nginx -d dev01-gateway.doctorapiesitos.com` to add the SSL block.
 
 server {

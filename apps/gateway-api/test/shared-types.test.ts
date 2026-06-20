@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   EVENT_MESSAGE_RECEIVED,
   MessageReceivedEventSchema,
-} from "@wa-gateway/shared-types";
+} from "@lynchpin-whatsapp-gateway/shared-types";
 
 const validEvent = {
   event_id: "evt_1",
