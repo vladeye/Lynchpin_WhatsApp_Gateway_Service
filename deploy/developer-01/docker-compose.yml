@@ -1,0 +1,14 @@
+services:
+  gateway-api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: wa-gateway-api:developer-01
+    container_name: wa-gateway-developer-01
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:3010:3010"
+    volumes:
+      - ./data/sessions:/app/sessions
