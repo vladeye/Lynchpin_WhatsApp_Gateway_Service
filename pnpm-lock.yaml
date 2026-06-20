@@ -23,7 +23,7 @@ importers:
 
   apps/gateway-api:
     dependencies:
-      '@wa-gateway/shared-types':
+      '@lynchpin-whatsapp-gateway/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
       fastify:

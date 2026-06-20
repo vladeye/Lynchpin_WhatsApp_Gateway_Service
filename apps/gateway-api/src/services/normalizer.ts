@@ -3,7 +3,7 @@ import {
   EVENT_MESSAGE_RECEIVED,
   EVENT_MESSAGE_UNSUPPORTED,
   type GatewayEvent,
-} from "@wa-gateway/shared-types";
+} from "@lynchpin-whatsapp-gateway/shared-types";
 
 /**
  * Minimal subset of a Baileys message we depend on. Kept local so the gateway

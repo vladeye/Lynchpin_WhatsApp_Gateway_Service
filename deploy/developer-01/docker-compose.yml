@@ -1,15 +1,15 @@
 # Explicit project name keeps this stack isolated from the developer-01
 # Odoo/n8n stack, which otherwise share the "developer-01" project namespace
 # (derived from the compose file's parent directory) and the same network.
-name: wa-gateway-developer-01
+name: lynchpin-whatsapp-gateway-developer-01
 
 services:
   gateway-api:
     build:
       context: ../..
       dockerfile: Dockerfile
-    image: wa-gateway-api:developer-01
-    container_name: wa-gateway-developer-01
+    image: lynchpin-whatsapp-gateway:developer-01
+    container_name: lynchpin-whatsapp-gateway-developer-01
     restart: unless-stopped
     env_file:
       - .env

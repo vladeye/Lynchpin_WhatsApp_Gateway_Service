@@ -6,7 +6,7 @@ system Nginx + Certbot reverse proxy.
 ## developer-01
 
 - Domain: `dev01-gateway.doctorapiesitos.com` -> `127.0.0.1:3010`
-- Install path: `/opt/appointment-platform/developer-01/whatsapp-gateway`
+- Install path: `/opt/appointment-platform/developer-01/lynchpin-whatsapp-gateway`
 - Host node is too old to run the app directly; it always runs in the Node 24
   Docker image (`../Dockerfile`).
 
@@ -15,8 +15,8 @@ system Nginx + Certbot reverse proxy.
 ```bash
 # On the server (ssh as root):
 git clone https://github.com/vladeye/Lynchpin_WhatsApp_Gateway_Service.git \
-  /opt/appointment-platform/developer-01/whatsapp-gateway
-cd /opt/appointment-platform/developer-01/whatsapp-gateway
+  /opt/appointment-platform/developer-01/lynchpin-whatsapp-gateway
+cd /opt/appointment-platform/developer-01/lynchpin-whatsapp-gateway
 
 cp deploy/developer-01/.env.example deploy/developer-01/.env
 # Fill GATEWAY_API_KEY and WEBHOOK_SECRET, e.g. `openssl rand -hex 32`.
@@ -28,9 +28,9 @@ curl -fsS http://127.0.0.1:3010/health   # -> {"status":"ok"}
 ### Reverse proxy + SSL
 
 ```bash
-cp deploy/nginx/wa-gateway-developers.conf.example \
-  /etc/nginx/sites-available/wa-gateway
-ln -sf /etc/nginx/sites-available/wa-gateway /etc/nginx/sites-enabled/wa-gateway
+cp deploy/nginx/lynchpin-whatsapp-gateway-developers.conf.example \
+  /etc/nginx/sites-available/lynchpin-whatsapp-gateway
+ln -sf /etc/nginx/sites-available/lynchpin-whatsapp-gateway /etc/nginx/sites-enabled/lynchpin-whatsapp-gateway
 nginx -t && systemctl reload nginx
 
 certbot --nginx -d dev01-gateway.doctorapiesitos.com
@@ -41,7 +41,7 @@ curl -fsS https://dev01-gateway.doctorapiesitos.com/health
 ### Redeploy
 
 ```bash
-cd /opt/appointment-platform/developer-01/whatsapp-gateway
+cd /opt/appointment-platform/developer-01/lynchpin-whatsapp-gateway
 git pull
 docker compose -f deploy/developer-01/docker-compose.yml up -d --build
 ```
@@ -50,5 +50,5 @@ docker compose -f deploy/developer-01/docker-compose.yml up -d --build
 
 ```bash
 docker compose -f deploy/developer-01/docker-compose.yml down
-# Reverse proxy: remove the sites-enabled/wa-gateway symlink, reload nginx.
+# Reverse proxy: remove the sites-enabled/lynchpin-whatsapp-gateway symlink, reload nginx.
 ```

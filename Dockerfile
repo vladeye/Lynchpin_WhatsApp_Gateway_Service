@@ -23,4 +23,4 @@ COPY . .
 
 EXPOSE 3010
 
-CMD ["pnpm", "--filter", "@wa-gateway/gateway-api", "start"]
+CMD ["pnpm", "--filter", "@lynchpin-whatsapp-gateway/gateway-api", "start"]
