@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { healthRoutes } from "./routes/health";
+import { rootRoutes } from "./routes/root";
 
 export interface BuildAppOptions {
   logger?: boolean;
@@ -14,6 +15,7 @@ export async function buildApp(
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: options.logger ?? false });
 
+  await app.register(rootRoutes);
   await app.register(healthRoutes);
 
   return app;
