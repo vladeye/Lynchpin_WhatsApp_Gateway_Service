@@ -13,6 +13,10 @@ const envSchema = z.object({
     .default("info"),
   GATEWAY_API_KEY: z.string().optional(),
   WEBHOOK_SECRET: z.string().optional(),
+  DATABASE_URL: z.string().optional(),
+  SESSION_ROOT: z.string().default("/app/sessions"),
+  N8N_WEBHOOK_BASE_URL: z.string().optional(),
+  MAX_TEXT_LENGTH: z.coerce.number().int().positive().default(4096),
 });
 
 export type Config = z.infer<typeof envSchema>;

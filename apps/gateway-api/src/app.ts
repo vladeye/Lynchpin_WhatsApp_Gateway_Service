@@ -5,11 +5,26 @@ import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import { healthRoutes } from "./routes/health";
 import { apiRoutes } from "./routes/api";
+import { accountsRoutes } from "./routes/accounts";
+import { messagesRoutes } from "./routes/messages";
+import { eventsRoutes } from "./routes/events";
+import { parametersRoutes } from "./routes/parameters";
+import type { AccountService } from "./services/account.service";
+import type { WebhookRepository } from "./stores/types";
+import type { Config } from "./config";
+
+export interface AppDeps {
+  accountService: AccountService;
+  webhookRepo: WebhookRepository;
+  config: Config;
+}
 
 export interface BuildAppOptions {
   logger?: boolean;
   /** Directory of the built admin-web frontend. Defaults to apps/admin-web/dist. */
   staticDir?: string;
+  /** API service dependencies. When omitted, only health/api/static are served. */
+  deps?: AppDeps;
 }
 
 function defaultStaticDir(): string {
@@ -30,6 +45,14 @@ export async function buildApp(
 
   await app.register(apiRoutes);
   await app.register(healthRoutes);
+
+  if (options.deps) {
+    const { accountService, webhookRepo, config } = options.deps;
+    await app.register(accountsRoutes(accountService));
+    await app.register(messagesRoutes(accountService));
+    await app.register(eventsRoutes(webhookRepo));
+    await app.register(parametersRoutes(config));
+  }
 
   const distDir = options.staticDir ?? defaultStaticDir();
   if (existsSync(path.join(distDir, "index.html"))) {
