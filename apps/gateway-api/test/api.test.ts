@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app";
 
-describe("root route", () => {
+describe("api index route", () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
@@ -13,8 +13,8 @@ describe("root route", () => {
     await app.close();
   });
 
-  it("GET / returns service identity", async () => {
-    const res = await app.inject({ method: "GET", url: "/" });
+  it("GET /api returns service identity", async () => {
+    const res = await app.inject({ method: "GET", url: "/api" });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
       service: "lynchpin-whatsapp-gateway",

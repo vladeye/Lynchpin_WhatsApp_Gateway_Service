@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fastify/static": "^8.0.3",
     "@lynchpin-whatsapp-gateway/shared-types": "workspace:*",
     "fastify": "^5.1.0",
     "pino": "^9.5.0",
