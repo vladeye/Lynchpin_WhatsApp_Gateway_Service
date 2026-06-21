@@ -12,11 +12,19 @@ export interface MessagesUpsert {
   messages: BaileysMessage[];
 }
 
+export interface HistorySet {
+  messages: BaileysMessage[];
+}
+
 export interface BaileysSocket {
   ev: {
     on(event: "connection.update", listener: (u: ConnectionUpdate) => void): void;
     on(event: "creds.update", listener: () => void): void;
     on(event: "messages.upsert", listener: (m: MessagesUpsert) => void): void;
+    on(
+      event: "messaging-history.set",
+      listener: (h: HistorySet) => void,
+    ): void;
   };
   user?: {
     id?: string | null;

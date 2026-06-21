@@ -123,7 +123,7 @@ export function ConversationsPage() {
         </div>
 
         {/* Thread + composer */}
-        <div className="flex flex-col">
+        <div className="flex min-h-0 flex-col">
           {selected ? (
             <>
               <div className="border-b border-slate-100 px-5 py-3">
@@ -136,7 +136,7 @@ export function ConversationsPage() {
                   </div>
                 )}
               </div>
-              <div className="flex-1 space-y-2 overflow-y-auto bg-slate-50 px-5 py-4">
+              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-slate-50 px-5 py-4">
                 {messages.data?.map((m) => (
                   <div
                     key={m.id}

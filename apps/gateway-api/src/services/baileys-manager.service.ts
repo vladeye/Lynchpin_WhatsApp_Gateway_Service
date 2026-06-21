@@ -12,9 +12,11 @@ import {
   isLoggedOut,
   type BaileysSocket,
   type ConnectionUpdate,
+  type HistorySet,
   type MessagesUpsert,
   type SocketFactory,
 } from "./socket.types";
+import type { BaileysMessage } from "./normalizer";
 
 interface Runtime {
   accountId: string;
@@ -89,6 +91,9 @@ export class BaileysManager {
     });
     socket.ev.on("messages.upsert", (m) => {
       void this.onMessages(accountId, m);
+    });
+    socket.ev.on("messaging-history.set", (h) => {
+      void this.onHistorySet(accountId, h);
     });
 
     await this.deps.accountRepo.update(accountId, {
@@ -261,24 +266,50 @@ export class BaileysManager {
     );
     if (upsert.type !== "notify" && upsert.type !== "append") return;
     for (const msg of upsert.messages) {
-      const event = normalizeInbound(accountId, msg);
-      if (event.event !== EVENT_MESSAGE_RECEIVED) continue;
-      const received = event as MessageReceivedEvent;
-      const fromMe = Boolean(msg.key?.fromMe);
-      // Capture both directions so the conversation view mirrors WhatsApp;
-      // fromMe messages (sent from the phone/other devices, or echoed from our
-      // own sends) are stored as outbound and deduped by wa_message_id.
-      const stored = await this.deps.messageRepo.capture({
-        id: randomUUID(),
-        gateway_account_id: accountId,
-        wa_message_id: received.payload.message.wa_message_id,
-        chat_id: received.payload.conversation.chat_id,
-        direction: fromMe ? "outbound" : "inbound",
-        type: received.payload.message.type,
-        body: received.payload.message.text,
-        normalized_payload: received,
-      });
-      if (!stored || fromMe) continue; // duplicate, or our own message
+      await this.captureMessage(accountId, msg, { emitWebhook: true });
+    }
+  }
+
+  /** Backfill past messages delivered by Baileys on connect (history sync). */
+  private async onHistorySet(
+    accountId: string,
+    history: HistorySet,
+  ): Promise<void> {
+    this.deps.logger?.info(
+      { accountId, count: history.messages?.length ?? 0 },
+      "messaging-history.set",
+    );
+    for (const msg of history.messages ?? []) {
+      // No webhook for historical messages — avoid flooding n8n with old data.
+      await this.captureMessage(accountId, msg, { emitWebhook: false });
+    }
+  }
+
+  /**
+   * Normalize and store a single message (either direction), deduped by
+   * wa_message_id. Emits the inbound webhook only for live inbound messages.
+   */
+  private async captureMessage(
+    accountId: string,
+    msg: BaileysMessage,
+    options: { emitWebhook: boolean },
+  ): Promise<void> {
+    const event = normalizeInbound(accountId, msg);
+    if (event.event !== EVENT_MESSAGE_RECEIVED) return;
+    const received = event as MessageReceivedEvent;
+    const fromMe = Boolean(msg.key?.fromMe);
+    const stored = await this.deps.messageRepo.capture({
+      id: randomUUID(),
+      gateway_account_id: accountId,
+      wa_message_id: received.payload.message.wa_message_id,
+      chat_id: received.payload.conversation.chat_id,
+      direction: fromMe ? "outbound" : "inbound",
+      type: received.payload.message.type,
+      body: received.payload.message.text,
+      normalized_payload: received,
+    });
+    if (!stored || fromMe) return; // duplicate, or our own message
+    if (options.emitWebhook) {
       await this.deps.webhook.emit(
         "message.received",
         accountId,
