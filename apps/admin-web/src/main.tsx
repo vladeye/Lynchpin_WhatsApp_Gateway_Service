@@ -7,6 +7,7 @@ import { Layout } from "./components/Layout";
 import { LoginPage } from "./pages/Login";
 import { DashboardPage } from "./pages/Dashboard";
 import { AccountsPage } from "./pages/Accounts";
+import { ConversationsPage } from "./pages/Conversations";
 import { LogsPage } from "./pages/Logs";
 import { ParametersPage } from "./pages/Parameters";
 import { SecurityPage } from "./pages/Security";
@@ -20,6 +21,7 @@ const router = createBrowserRouter([
     children: [
       { path: "/dashboard", element: <DashboardPage /> },
       { path: "/accounts", element: <AccountsPage /> },
+      { path: "/accounts/:id/conversations", element: <ConversationsPage /> },
       { path: "/logs", element: <LogsPage /> },
       { path: "/parameters", element: <ParametersPage /> },
       { path: "/security", element: <SecurityPage /> },

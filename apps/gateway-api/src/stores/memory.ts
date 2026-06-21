@@ -1,4 +1,8 @@
-import type { EventLogItem } from "@lynchpin-whatsapp-gateway/shared-types";
+import type {
+  ChatMessage,
+  ChatSummary,
+  EventLogItem,
+} from "@lynchpin-whatsapp-gateway/shared-types";
 import type {
   AccountRecord,
   AccountRepository,
@@ -65,9 +69,20 @@ export class InMemoryAccountRepository implements AccountRepository {
   }
 }
 
+interface StoredMessage {
+  id: string;
+  gateway_account_id: string;
+  chat_id: string;
+  direction: string;
+  type: string;
+  body: string | null;
+  created_at: string;
+}
+
 export class InMemoryMessageRepository implements MessageRepository {
   readonly inbound: InboundMessageRow[] = [];
   readonly outbound = new Map<string, OutboundMessageRow>();
+  private readonly all: StoredMessage[] = [];
   private readonly seen = new Set<string>();
 
   async insertInbound(row: InboundMessageRow): Promise<boolean> {
@@ -75,12 +90,30 @@ export class InMemoryMessageRepository implements MessageRepository {
     if (row.wa_message_id && this.seen.has(key)) return false;
     if (row.wa_message_id) this.seen.add(key);
     this.inbound.push(row);
+    this.all.push({
+      id: row.id,
+      gateway_account_id: row.gateway_account_id,
+      chat_id: row.chat_id,
+      direction: "inbound",
+      type: row.type,
+      body: row.body,
+      created_at: new Date().toISOString(),
+    });
     return true;
   }
 
   async insertOutbound(row: OutboundMessageRow): Promise<{ duplicate: boolean }> {
     if (this.outbound.has(row.request_id)) return { duplicate: true };
     this.outbound.set(row.request_id, row);
+    this.all.push({
+      id: row.id,
+      gateway_account_id: row.gateway_account_id,
+      chat_id: row.chat_id,
+      direction: "outbound",
+      type: row.type,
+      body: row.body,
+      created_at: new Date().toISOString(),
+    });
     return { duplicate: false };
   }
 
@@ -91,6 +124,43 @@ export class InMemoryMessageRepository implements MessageRepository {
   async setOutboundWaId(requestId: string, waMessageId: string): Promise<void> {
     const row = this.outbound.get(requestId);
     if (row) row.wa_message_id = waMessageId;
+  }
+
+  async listChats(accountId: string, limit: number): Promise<ChatSummary[]> {
+    const byChat = new Map<string, StoredMessage>();
+    for (const m of this.all) {
+      if (m.gateway_account_id !== accountId) continue;
+      byChat.set(m.chat_id, m); // last one wins (array is chronological)
+    }
+    return [...byChat.values()]
+      .reverse()
+      .slice(0, limit)
+      .map((m) => ({
+        chat_id: m.chat_id,
+        contact_name: null,
+        last_body: m.body,
+        last_direction: m.direction,
+        last_at: m.created_at,
+      }));
+  }
+
+  async listMessages(
+    accountId: string,
+    chatId: string,
+    limit: number,
+  ): Promise<ChatMessage[]> {
+    return this.all
+      .filter(
+        (m) => m.gateway_account_id === accountId && m.chat_id === chatId,
+      )
+      .slice(0, limit)
+      .map((m) => ({
+        id: m.id,
+        direction: m.direction,
+        type: m.type,
+        body: m.body,
+        created_at: m.created_at,
+      }));
   }
 }
 

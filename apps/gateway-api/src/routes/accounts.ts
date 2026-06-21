@@ -70,6 +70,29 @@ export function accountsRoutes(service: AccountService) {
       withAccount(async (id) => ({ success: true, account: await service.status(id) })),
     );
 
+    app.get<{ Params: IdParams }>(
+      "/api/accounts/:id/chats",
+      withAccount(async (id) => ({ success: true, chats: await service.listChats(id) })),
+    );
+
+    app.get<{ Params: { id: string; chatId: string } }>(
+      "/api/accounts/:id/chats/:chatId/messages",
+      async (req, reply) => {
+        try {
+          const messages = await service.listMessages(
+            req.params.id,
+            decodeURIComponent(req.params.chatId),
+          );
+          return { success: true, messages };
+        } catch (err) {
+          if (err instanceof AccountNotFoundError) {
+            return fail(reply, 404, "ACCOUNT_NOT_FOUND", "Account not found");
+          }
+          throw err;
+        }
+      },
+    );
+
     app.post<{ Params: IdParams }>(
       "/api/accounts/:id/connect/qr",
       withAccount(async (id) => ({ success: true, account: await service.connectQr(id) })),

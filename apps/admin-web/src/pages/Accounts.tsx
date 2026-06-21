@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import type { Account } from "@lynchpin-whatsapp-gateway/shared-types";
 import { api } from "../lib/api";
@@ -183,6 +184,7 @@ function ConnectDialog({
 
 export function AccountsPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [showAdd, setShowAdd] = useState(false);
   const [connecting, setConnecting] = useState<Account | null>(null);
 
@@ -265,6 +267,12 @@ export function AccountsPage() {
                       className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50"
                     >
                       Disconnect
+                    </button>
+                    <button
+                      onClick={() => navigate(`/accounts/${a.id}/conversations`)}
+                      className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-brand-700 hover:bg-brand-100"
+                    >
+                      View
                     </button>
                     <button
                       onClick={() =>

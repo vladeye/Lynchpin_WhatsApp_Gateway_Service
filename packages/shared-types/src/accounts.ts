@@ -54,6 +54,26 @@ export const SendMessageSchema = z.object({
 });
 export type SendMessageInput = z.infer<typeof SendMessageSchema>;
 
+/** Summary of a conversation (chat) for the conversations list. */
+export const ChatSummarySchema = z.object({
+  chat_id: z.string(),
+  contact_name: z.string().nullable(),
+  last_body: z.string().nullable(),
+  last_direction: z.string().nullable(),
+  last_at: z.string().nullable(),
+});
+export type ChatSummary = z.infer<typeof ChatSummarySchema>;
+
+/** A single message within a conversation. */
+export const ChatMessageSchema = z.object({
+  id: z.string(),
+  direction: z.string(),
+  type: z.string(),
+  body: z.string().nullable(),
+  created_at: z.string(),
+});
+export type ChatMessage = z.infer<typeof ChatMessageSchema>;
+
 /** A row in the Logs event feed (backed by webhook deliveries). */
 export const EventLogItemSchema = z.object({
   id: z.string(),

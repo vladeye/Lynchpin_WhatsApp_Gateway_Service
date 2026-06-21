@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { AccountsPage } from "../src/pages/Accounts";
 
 function renderWithClient() {
@@ -9,7 +10,9 @@ function renderWithClient() {
   });
   return render(
     <QueryClientProvider client={client}>
-      <AccountsPage />
+      <MemoryRouter>
+        <AccountsPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }

@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import type {
   Account,
   AccountStatus,
+  ChatMessage,
+  ChatSummary,
   SendMessageInput,
 } from "@lynchpin-whatsapp-gateway/shared-types";
 import type {
@@ -57,6 +59,16 @@ export class AccountService {
 
   async status(id: string): Promise<AccountStatus> {
     return toStatus(await this.require(id));
+  }
+
+  async listChats(id: string): Promise<ChatSummary[]> {
+    await this.require(id);
+    return this.messageRepo.listChats(id, 100);
+  }
+
+  async listMessages(id: string, chatId: string): Promise<ChatMessage[]> {
+    await this.require(id);
+    return this.messageRepo.listMessages(id, chatId, 300);
   }
 
   async create(input: {

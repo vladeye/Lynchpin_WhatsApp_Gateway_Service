@@ -1,6 +1,8 @@
 import type {
   Account,
   AccountStatus,
+  ChatMessage,
+  ChatSummary,
   EventLogItem,
 } from "@lynchpin-whatsapp-gateway/shared-types";
 
@@ -64,6 +66,23 @@ export const api = {
     send(`/api/accounts/${id}/disconnect`, "POST", { logout }),
   reconnect: (id: string) => send(`/api/accounts/${id}/reconnect`, "POST"),
   deleteAccount: (id: string) => send(`/api/accounts/${id}`, "DELETE"),
+
+  listChats: (id: string) =>
+    getJson<{ chats: ChatSummary[] }>(`/api/accounts/${id}/chats`).then(
+      (r) => r.chats,
+    ),
+  listMessages: (id: string, chatId: string) =>
+    getJson<{ messages: ChatMessage[] }>(
+      `/api/accounts/${id}/chats/${encodeURIComponent(chatId)}/messages`,
+    ).then((r) => r.messages),
+  sendChatMessage: (id: string, chatId: string, text: string) =>
+    send("/api/messages/send", "POST", {
+      request_id: crypto.randomUUID(),
+      gateway_account_id: id,
+      chat_id: chatId,
+      type: "text",
+      text,
+    }),
 
   listEvents: () =>
     getJson<{ events: EventLogItem[] }>("/api/events").then((r) => r.events),
