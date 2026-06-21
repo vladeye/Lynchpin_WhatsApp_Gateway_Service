@@ -58,6 +58,7 @@ export type SendMessageInput = z.infer<typeof SendMessageSchema>;
 export const ChatSummarySchema = z.object({
   chat_id: z.string(),
   contact_name: z.string().nullable(),
+  is_self: z.boolean(),
   last_body: z.string().nullable(),
   last_direction: z.string().nullable(),
   last_at: z.string().nullable(),

@@ -78,18 +78,39 @@ export class PgMessageRepository implements MessageRepository {
 
   async listChats(accountId: string, limit: number): Promise<ChatSummary[]> {
     const { rows } = await this.pool.query<ChatSummary>(
-      `SELECT chat_id, contact_name, last_body, last_direction, last_at FROM (
+      `SELECT
+         t.chat_id,
+         names.contact_name,
+         (t.chat_id = a.self_lid
+            OR (a.phone_number IS NOT NULL
+                AND t.chat_id = a.phone_number || '@s.whatsapp.net')) AS is_self,
+         t.last_body,
+         t.last_direction,
+         t.last_at
+       FROM (
          SELECT DISTINCT ON (chat_id)
            chat_id,
            body AS last_body,
            direction AS last_direction,
-           normalized_payload->'payload'->'conversation'->>'contact_name' AS contact_name,
            to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS last_at,
            created_at
          FROM gateway_messages
          WHERE gateway_account_id = $1
          ORDER BY chat_id, created_at DESC
        ) t
+       JOIN gateway_accounts a ON a.id = $1
+       LEFT JOIN LATERAL (
+         SELECT m.normalized_payload->'payload'->'conversation'->>'contact_name'
+                  AS contact_name
+         FROM gateway_messages m
+         WHERE m.gateway_account_id = $1
+           AND m.chat_id = t.chat_id
+           AND m.direction = 'inbound'
+           AND m.normalized_payload->'payload'->'conversation'->>'contact_name'
+                 IS NOT NULL
+         ORDER BY m.created_at DESC
+         LIMIT 1
+       ) names ON true
        ORDER BY t.created_at DESC
        LIMIT $2`,
       [accountId, limit],

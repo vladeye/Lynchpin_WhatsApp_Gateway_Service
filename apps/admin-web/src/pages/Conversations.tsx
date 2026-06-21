@@ -8,8 +8,19 @@ function phoneOf(chatId: string): string {
   return chatId.split("@")[0] ?? chatId;
 }
 
+/** Friendly label: self-chat, known contact name, phone, or generic. */
 function chatTitle(c: ChatSummary): string {
-  return c.contact_name ?? phoneOf(c.chat_id);
+  if (c.is_self) return "You (self-chat)";
+  if (c.contact_name) return c.contact_name;
+  if (c.chat_id.endsWith("@s.whatsapp.net")) return phoneOf(c.chat_id);
+  if (c.chat_id.endsWith("@g.us")) return "Group chat";
+  return "WhatsApp user";
+}
+
+function chatSubtitle(c: ChatSummary): string {
+  if (c.chat_id.endsWith("@s.whatsapp.net")) return `+${phoneOf(c.chat_id)}`;
+  if (c.is_self) return "Messages to yourself";
+  return "";
 }
 
 function time(ts: string | null): string {
@@ -63,6 +74,7 @@ export function ConversationsPage() {
   });
 
   const connected = account.data?.state === "connected";
+  const selectedChat = chats.data?.find((c) => c.chat_id === selected) ?? null;
 
   return (
     <div>
@@ -116,8 +128,13 @@ export function ConversationsPage() {
             <>
               <div className="border-b border-slate-100 px-5 py-3">
                 <div className="font-medium text-slate-800">
-                  {phoneOf(selected)}
+                  {selectedChat ? chatTitle(selectedChat) : phoneOf(selected)}
                 </div>
+                {selectedChat && chatSubtitle(selectedChat) && (
+                  <div className="text-xs text-slate-400">
+                    {chatSubtitle(selectedChat)}
+                  </div>
+                )}
               </div>
               <div className="flex-1 space-y-2 overflow-y-auto bg-slate-50 px-5 py-4">
                 {messages.data?.map((m) => (

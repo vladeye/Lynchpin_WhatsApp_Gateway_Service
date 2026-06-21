@@ -7,7 +7,7 @@ import type {
 } from "./types";
 
 const COLUMNS = `id, external_account_id, name, state, phone_number, display_name,
-  session_path, last_qr, last_error,
+  session_path, self_lid, last_qr, last_error,
   to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
   to_char(updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS updated_at,
   to_char(last_connected_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS last_connected_at,
