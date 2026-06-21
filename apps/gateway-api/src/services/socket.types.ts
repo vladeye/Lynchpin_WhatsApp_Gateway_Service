@@ -49,6 +49,11 @@ export interface CreatedSocket {
   socket: BaileysSocket;
   saveCreds: () => Promise<void>;
   isRegistered: boolean;
+  /**
+   * Download the binary content of a media message. Returns null when the
+   * message has no media or the download fails. Injectable so tests can stub it.
+   */
+  downloadMedia?: (msg: BaileysMessage) => Promise<Buffer | null>;
 }
 
 /** Injectable so tests can supply a fake socket instead of real Baileys. */

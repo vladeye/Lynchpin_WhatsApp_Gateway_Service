@@ -5,6 +5,7 @@ import type {
 } from "@lynchpin-whatsapp-gateway/shared-types";
 import type {
   CapturedMessageRow,
+  MediaRef,
   MessageRepository,
   OutboundMessageRow,
 } from "./types";
@@ -15,9 +16,11 @@ export class PgMessageRepository implements MessageRepository {
   async capture(row: CapturedMessageRow): Promise<boolean> {
     const res = await this.pool.query(
       `INSERT INTO gateway_messages
-         (id, gateway_account_id, wa_message_id, chat_id, direction, type, body, status, normalized_payload)
+         (id, gateway_account_id, wa_message_id, chat_id, direction, type, body, status,
+          media_path, media_mime, media_filename, media_size, normalized_payload)
        VALUES ($1, $2, $3, $4, $5, $6, $7,
-               CASE WHEN $5 = 'inbound' THEN 'received' ELSE 'sent' END, $8)
+               CASE WHEN $5 = 'inbound' THEN 'received' ELSE 'sent' END,
+               $8, $9, $10, $11, $12)
        ON CONFLICT (gateway_account_id, wa_message_id) WHERE wa_message_id IS NOT NULL
        DO NOTHING`,
       [
@@ -28,6 +31,10 @@ export class PgMessageRepository implements MessageRepository {
         row.direction,
         row.type,
         row.body,
+        row.media_path ?? null,
+        row.media_mime ?? null,
+        row.media_filename ?? null,
+        row.media_size ?? null,
         JSON.stringify(row.normalized_payload ?? null),
       ],
     );
@@ -76,6 +83,19 @@ export class PgMessageRepository implements MessageRepository {
     }
   }
 
+  async getMediaRef(
+    accountId: string,
+    messageId: string,
+  ): Promise<MediaRef | null> {
+    const { rows } = await this.pool.query<MediaRef>(
+      `SELECT media_path, media_mime, media_filename
+         FROM gateway_messages
+        WHERE gateway_account_id = $1 AND id = $2 AND media_path IS NOT NULL`,
+      [accountId, messageId],
+    );
+    return rows[0] ?? null;
+  }
+
   async listChats(accountId: string, limit: number): Promise<ChatSummary[]> {
     const { rows } = await this.pool.query<ChatSummary>(
       `SELECT
@@ -85,12 +105,14 @@ export class PgMessageRepository implements MessageRepository {
             OR (a.phone_number IS NOT NULL
                 AND t.chat_id = a.phone_number || '@s.whatsapp.net')) AS is_self,
          t.last_body,
+         t.last_type,
          t.last_direction,
          t.last_at
        FROM (
          SELECT DISTINCT ON (chat_id)
            chat_id,
            body AS last_body,
+           type AS last_type,
            direction AS last_direction,
            to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS last_at,
            created_at
@@ -124,7 +146,7 @@ export class PgMessageRepository implements MessageRepository {
     limit: number,
   ): Promise<ChatMessage[]> {
     const { rows } = await this.pool.query<ChatMessage>(
-      `SELECT id, direction, type, body,
+      `SELECT id, direction, type, body, media_mime, media_filename,
               to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at
          FROM gateway_messages
         WHERE gateway_account_id = $1 AND chat_id = $2

@@ -1,8 +1,10 @@
 import makeWASocketDefault, {
+  downloadMediaMessage,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
 } from "@whiskeysockets/baileys";
 import { pino } from "pino";
+import type { BaileysMessage } from "./normalizer";
 
 // Baileys ships as CJS; under ESM/tsx interop the default export can be wrapped
 // one level deep. Unwrap so we always call the actual factory function.
@@ -46,5 +48,23 @@ export async function createBaileysSocket({
     socket: socket as unknown as BaileysSocket,
     saveCreds,
     isRegistered: Boolean(state.creds?.registered),
+    downloadMedia: async (msg: BaileysMessage): Promise<Buffer | null> => {
+      try {
+        const buffer = await downloadMediaMessage(
+          // Baileys' WAMessage type is far richer than our local subset; the
+          // function only reads key/message which our shape provides.
+          msg as unknown as Parameters<typeof downloadMediaMessage>[0],
+          "buffer",
+          {},
+          {
+            logger: silentLogger,
+            reuploadRequest: socket.updateMediaMessage,
+          },
+        );
+        return buffer as Buffer;
+      } catch {
+        return null;
+      }
+    },
   };
 }

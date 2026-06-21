@@ -22,6 +22,7 @@ const validEvent = {
       direction: "inbound",
       type: "text",
       text: "Hola",
+      media: null,
       timestamp: "2026-06-20T20:15:00.000Z",
     },
   },

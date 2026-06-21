@@ -62,7 +62,18 @@ export interface CapturedMessageRow {
   direction: "inbound" | "outbound";
   type: string;
   body: string | null;
+  media_path?: string | null;
+  media_mime?: string | null;
+  media_filename?: string | null;
+  media_size?: number | null;
   normalized_payload: unknown;
+}
+
+/** Stored media reference used to serve an attachment back to the console. */
+export interface MediaRef {
+  media_path: string;
+  media_mime: string | null;
+  media_filename: string | null;
 }
 
 export interface OutboundMessageRow {
@@ -82,6 +93,8 @@ export interface MessageRepository {
   insertOutbound(row: OutboundMessageRow): Promise<{ duplicate: boolean }>;
   getByRequestId(requestId: string): Promise<OutboundMessageRow | null>;
   setOutboundWaId(requestId: string, waMessageId: string): Promise<void>;
+  /** Resolve a stored media attachment for an account's message. */
+  getMediaRef(accountId: string, messageId: string): Promise<MediaRef | null>;
   listChats(accountId: string, limit: number): Promise<ChatSummary[]>;
   listMessages(
     accountId: string,
