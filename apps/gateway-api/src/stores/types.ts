@@ -1,4 +1,9 @@
-import type { AccountState, EventLogItem } from "@lynchpin-whatsapp-gateway/shared-types";
+import type {
+  AccountState,
+  ChatMessage,
+  ChatSummary,
+  EventLogItem,
+} from "@lynchpin-whatsapp-gateway/shared-types";
 
 export interface AccountRecord {
   id: string;
@@ -74,6 +79,12 @@ export interface MessageRepository {
   insertOutbound(row: OutboundMessageRow): Promise<{ duplicate: boolean }>;
   getByRequestId(requestId: string): Promise<OutboundMessageRow | null>;
   setOutboundWaId(requestId: string, waMessageId: string): Promise<void>;
+  listChats(accountId: string, limit: number): Promise<ChatSummary[]>;
+  listMessages(
+    accountId: string,
+    chatId: string,
+    limit: number,
+  ): Promise<ChatMessage[]>;
 }
 
 export interface WebhookRecord {

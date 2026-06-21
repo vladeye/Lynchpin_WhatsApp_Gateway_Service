@@ -1,5 +1,9 @@
 import type { Pool } from "pg";
 import type {
+  ChatMessage,
+  ChatSummary,
+} from "@lynchpin-whatsapp-gateway/shared-types";
+import type {
   InboundMessageRow,
   MessageRepository,
   OutboundMessageRow,
@@ -62,5 +66,43 @@ export class PgMessageRepository implements MessageRepository {
       "UPDATE gateway_messages SET wa_message_id = $2 WHERE request_id = $1",
       [requestId, waMessageId],
     );
+  }
+
+  async listChats(accountId: string, limit: number): Promise<ChatSummary[]> {
+    const { rows } = await this.pool.query<ChatSummary>(
+      `SELECT chat_id, contact_name, last_body, last_direction, last_at FROM (
+         SELECT DISTINCT ON (chat_id)
+           chat_id,
+           body AS last_body,
+           direction AS last_direction,
+           normalized_payload->'payload'->'conversation'->>'contact_name' AS contact_name,
+           to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS last_at,
+           created_at
+         FROM gateway_messages
+         WHERE gateway_account_id = $1
+         ORDER BY chat_id, created_at DESC
+       ) t
+       ORDER BY t.created_at DESC
+       LIMIT $2`,
+      [accountId, limit],
+    );
+    return rows;
+  }
+
+  async listMessages(
+    accountId: string,
+    chatId: string,
+    limit: number,
+  ): Promise<ChatMessage[]> {
+    const { rows } = await this.pool.query<ChatMessage>(
+      `SELECT id, direction, type, body,
+              to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at
+         FROM gateway_messages
+        WHERE gateway_account_id = $1 AND chat_id = $2
+        ORDER BY created_at ASC
+        LIMIT $3`,
+      [accountId, chatId, limit],
+    );
+    return rows;
   }
 }
