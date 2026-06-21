@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
 import type { Account } from "@lynchpin-whatsapp-gateway/shared-types";
@@ -69,8 +69,8 @@ function ConnectDialog({
 }) {
   const [tab, setTab] = useState<"qr" | "code">("qr");
   const [phone, setPhone] = useState("");
+  const startedRef = useRef(false);
 
-  // Trigger QR connect once when opening the QR tab.
   const qrConnect = useMutation({ mutationFn: () => api.connectQr(account.id) });
   const codeConnect = useMutation({
     mutationFn: () => api.connectCode(account.id, phone),
@@ -83,7 +83,16 @@ function ConnectDialog({
     refetchInterval: 2000,
   });
 
+  // Auto-start the QR session the first time the QR tab is shown.
+  useEffect(() => {
+    if (tab === "qr" && !startedRef.current) {
+      startedRef.current = true;
+      qrConnect.mutate();
+    }
+  }, [tab, qrConnect]);
+
   const connected = status.data?.state === "connected";
+  const qr = status.data?.last_qr;
 
   return (
     <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/40 p-4">
@@ -122,30 +131,28 @@ function ConnectDialog({
               </p>
             </div>
           ) : tab === "qr" ? (
-            <>
-              {qrConnect.isIdle && (
-                <button
-                  onClick={() => qrConnect.mutate()}
-                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-                >
-                  Start QR connect
-                </button>
-              )}
-              {!qrConnect.isIdle && status.data?.last_qr ? (
-                <>
-                  <QRCodeSVG value={status.data.last_qr} size={220} />
-                  <p className="mt-3 text-sm text-slate-500">
-                    Scan with WhatsApp → Linked devices
-                  </p>
-                </>
-              ) : (
-                !qrConnect.isIdle && (
-                  <p className="text-sm text-slate-500">
-                    Waiting for QR code…
-                  </p>
-                )
-              )}
-            </>
+            qr ? (
+              <>
+                <QRCodeSVG value={qr} size={220} />
+                <p className="mt-3 text-sm text-slate-500">
+                  Scan with WhatsApp → Linked devices
+                </p>
+              </>
+            ) : qrConnect.isError ? (
+              <div className="text-sm text-red-600">
+                {String(qrConnect.error)}
+                <div className="mt-3">
+                  <button
+                    onClick={() => qrConnect.mutate()}
+                    className="rounded-lg bg-brand-600 px-4 py-2 font-semibold text-white hover:bg-brand-700"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Waiting for QR code…</p>
+            )
           ) : (
             <div className="w-full">
               <input
