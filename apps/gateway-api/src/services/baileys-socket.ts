@@ -35,8 +35,11 @@ export async function createBaileysSocket({
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, silentLogger),
     },
-    logger: silentLogger,
+    logger: pino({ level: process.env.BAILEYS_LOG_LEVEL ?? "silent" }),
     browser: ["Lynchpin Gateway", "Chrome", "1.0.0"],
+    // Request message history on connect so the conversation view can backfill
+    // past chats (delivered via the messaging-history.set event).
+    syncFullHistory: true,
   });
 
   return {

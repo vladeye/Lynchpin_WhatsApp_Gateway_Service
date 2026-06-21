@@ -164,6 +164,42 @@ describe("BaileysManager", () => {
     expect(events.filter((e) => e.event_type === "message.received")).toHaveLength(0);
   });
 
+  it("backfills history (both directions) without webhooks", async () => {
+    const { accountRepo, messageRepo, webhookRepo, manager, fake } = setup();
+    await accountRepo.create({
+      id: "a1",
+      external_account_id: "x1",
+      name: "A1",
+      session_path: "/tmp/a1",
+    });
+    await manager.start("a1");
+    fake.emit("messaging-history.set", {
+      messages: [
+        {
+          key: { remoteJid: "573001112233@s.whatsapp.net", id: "H1", fromMe: false },
+          message: { conversation: "old inbound" },
+          pushName: "Maria",
+          messageTimestamp: 1699999999,
+        },
+        {
+          key: { remoteJid: "573001112233@s.whatsapp.net", id: "H2", fromMe: true },
+          message: { conversation: "old outbound" },
+          messageTimestamp: 1700000000,
+        },
+      ],
+    });
+    await tick();
+    const msgs = await messageRepo.listMessages(
+      "a1",
+      "573001112233@s.whatsapp.net",
+      10,
+    );
+    expect(msgs).toHaveLength(2);
+    expect(msgs.map((m) => m.direction).sort()).toEqual(["inbound", "outbound"]);
+    const events = await webhookRepo.listRecent(10);
+    expect(events.filter((e) => e.event_type === "message.received")).toHaveLength(0);
+  });
+
   it("sends text through the socket", async () => {
     const { accountRepo, manager, fake } = setup();
     await accountRepo.create({
