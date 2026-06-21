@@ -2,6 +2,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { BaileysManager } from "../src/services/baileys-manager.service";
+import { MediaStore } from "../src/services/media-store.service";
 import { WebhookDispatcher } from "../src/services/webhook-dispatch.service";
 import {
   InMemoryAccountRepository,
@@ -40,24 +41,42 @@ class FakeSocket {
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
+/** Poll until `fn` returns an array of at least `n` items (or time out). */
+async function waitForLength<T>(
+  fn: () => Promise<T[]>,
+  n: number,
+): Promise<T[]> {
+  for (let i = 0; i < 50; i += 1) {
+    const r = await fn();
+    if (r.length >= n) return r;
+    await new Promise((res) => setTimeout(res, 20));
+  }
+  return fn();
+}
+
 function setup() {
   const accountRepo = new InMemoryAccountRepository();
   const messageRepo = new InMemoryMessageRepository();
   const webhookRepo = new InMemoryWebhookRepository();
   const webhook = new WebhookDispatcher(webhookRepo); // no baseUrl -> records only
   const fake = new FakeSocket();
+  const mediaStore = new MediaStore(
+    path.join(tmpdir(), `lp-test-media-${Math.random().toString(36).slice(2)}`),
+  );
   const manager = new BaileysManager({
     socketFactory: async () => ({
       socket: fake as unknown as BaileysSocket,
       saveCreds: async () => {},
       isRegistered: false,
+      downloadMedia: async () => Buffer.from("fake-media-bytes"),
     }),
     accountRepo,
     messageRepo,
     webhook,
     sessionRoot: path.join(tmpdir(), "lp-test-sessions"),
+    mediaStore,
   });
-  return { accountRepo, messageRepo, webhookRepo, fake, manager };
+  return { accountRepo, messageRepo, webhookRepo, fake, manager, mediaStore };
 }
 
 describe("BaileysManager", () => {
@@ -131,6 +150,49 @@ describe("BaileysManager", () => {
     expect(msgs[0]?.direction).toBe("inbound");
     const events = await webhookRepo.listRecent(10);
     expect(events.filter((e) => e.event_type === "message.received")).toHaveLength(1);
+  });
+
+  it("stores an inbound image, downloads its media, and emits a webhook", async () => {
+    const { accountRepo, messageRepo, webhookRepo, manager, fake } = setup();
+    await accountRepo.create({
+      id: "a1",
+      external_account_id: "x1",
+      name: "A1",
+      session_path: "/tmp/a1",
+    });
+    await manager.start("a1");
+    fake.emit("messages.upsert", {
+      type: "notify",
+      messages: [
+        {
+          key: { remoteJid: "573001112233@s.whatsapp.net", id: "IMG1", fromMe: false },
+          message: {
+            imageMessage: {
+              mimetype: "image/jpeg",
+              caption: "look",
+              fileLength: 16,
+            },
+          },
+          pushName: "Maria",
+          messageTimestamp: 1700000002,
+        },
+      ],
+    });
+    const msgs = await waitForLength(
+      () => messageRepo.listMessages("a1", "573001112233@s.whatsapp.net", 10),
+      1,
+    );
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]?.type).toBe("image");
+    expect(msgs[0]?.body).toBe("look");
+    expect(msgs[0]?.media_mime).toBe("image/jpeg");
+    // The downloaded file is resolvable via the repo's media ref.
+    const ref = await messageRepo.getMediaRef("a1", msgs[0]!.id);
+    expect(ref?.media_path).toBeTruthy();
+    const events = await webhookRepo.listRecent(10);
+    expect(
+      events.filter((e) => e.event_type === "message.received"),
+    ).toHaveLength(1);
   });
 
   it("captures fromMe messages as outbound without a webhook", async () => {

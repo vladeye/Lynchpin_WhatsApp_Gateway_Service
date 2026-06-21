@@ -1,3 +1,4 @@
+import { createReadStream, existsSync } from "node:fs";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import {
   ConnectCodeSchema,
@@ -84,6 +85,35 @@ export function accountsRoutes(service: AccountService) {
             decodeURIComponent(req.params.chatId),
           );
           return { success: true, messages };
+        } catch (err) {
+          if (err instanceof AccountNotFoundError) {
+            return fail(reply, 404, "ACCOUNT_NOT_FOUND", "Account not found");
+          }
+          throw err;
+        }
+      },
+    );
+
+    app.get<{ Params: { id: string; messageId: string } }>(
+      "/api/accounts/:id/media/:messageId",
+      async (req, reply) => {
+        try {
+          const media = await service.getMedia(
+            req.params.id,
+            req.params.messageId,
+          );
+          if (!media || !existsSync(media.path)) {
+            return fail(reply, 404, "MEDIA_NOT_FOUND", "Media not found");
+          }
+          if (media.mime) reply.type(media.mime);
+          reply.header("Cache-Control", "private, max-age=31536000, immutable");
+          if (media.filename) {
+            reply.header(
+              "Content-Disposition",
+              `inline; filename="${media.filename.replace(/["\r\n]/g, "")}"`,
+            );
+          }
+          return reply.send(createReadStream(media.path));
         } catch (err) {
           if (err instanceof AccountNotFoundError) {
             return fail(reply, 404, "ACCOUNT_NOT_FOUND", "Account not found");

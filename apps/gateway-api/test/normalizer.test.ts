@@ -50,6 +50,7 @@ describe("normalizeInbound", () => {
           direction: "inbound",
           type: "text",
           text: "Hola, quiero una cita",
+          media: null,
           timestamp: TS_ISO,
         },
       },
@@ -92,10 +93,81 @@ describe("normalizeInbound", () => {
     });
   });
 
-  it("falls back to message.unsupported for non-text types", () => {
+  it("normalizes an image message with caption and media descriptor", () => {
     const event = normalizeInbound(
       "acc_001",
-      textMessage({ message: { imageMessage: { url: "x" } } as never }),
+      textMessage({
+        message: {
+          imageMessage: {
+            mimetype: "image/jpeg",
+            caption: "mira esto",
+            fileLength: 12345,
+          },
+        } as never,
+      }),
+      FIXED,
+    );
+    expect(event).toMatchObject({
+      event: EVENT_MESSAGE_RECEIVED,
+      payload: {
+        message: {
+          type: "image",
+          text: "mira esto",
+          media: { mimetype: "image/jpeg", filename: null, size: 12345 },
+        },
+      },
+    });
+    expect(GatewayEventSchema.safeParse(event).success).toBe(true);
+  });
+
+  it("normalizes a document message using its filename", () => {
+    const event = normalizeInbound(
+      "acc_001",
+      textMessage({
+        message: {
+          documentMessage: {
+            mimetype: "application/pdf",
+            fileName: "cita.pdf",
+            fileLength: "2048",
+          },
+        } as never,
+      }),
+      FIXED,
+    );
+    expect(event).toMatchObject({
+      payload: {
+        message: {
+          type: "document",
+          text: null,
+          media: { mimetype: "application/pdf", filename: "cita.pdf", size: 2048 },
+        },
+      },
+    });
+  });
+
+  it("unwraps documentWithCaptionMessage", () => {
+    const event = normalizeInbound(
+      "acc_001",
+      textMessage({
+        message: {
+          documentWithCaptionMessage: {
+            message: {
+              documentMessage: { mimetype: "application/pdf", fileName: "x.pdf" },
+            },
+          },
+        } as never,
+      }),
+      FIXED,
+    );
+    expect(event).toMatchObject({
+      payload: { message: { type: "document" } },
+    });
+  });
+
+  it("falls back to message.unsupported for genuinely unknown types", () => {
+    const event = normalizeInbound(
+      "acc_001",
+      textMessage({ message: { contactMessage: { displayName: "x" } } as never }),
       FIXED,
     );
     expect(event).toEqual({
@@ -104,7 +176,7 @@ describe("normalizeInbound", () => {
       gateway_account_id: "acc_001",
       occurred_at: "2026-06-20T20:15:01.000Z",
       payload: {
-        message_type: "imageMessage",
+        message_type: "contactMessage",
         reason: "unsupported_message_type",
       },
     });

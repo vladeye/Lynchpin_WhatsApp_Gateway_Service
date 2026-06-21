@@ -60,6 +60,7 @@ export const ChatSummarySchema = z.object({
   contact_name: z.string().nullable(),
   is_self: z.boolean(),
   last_body: z.string().nullable(),
+  last_type: z.string().nullable(),
   last_direction: z.string().nullable(),
   last_at: z.string().nullable(),
 });
@@ -71,6 +72,8 @@ export const ChatMessageSchema = z.object({
   direction: z.string(),
   type: z.string(),
   body: z.string().nullable(),
+  media_mime: z.string().nullable(),
+  media_filename: z.string().nullable(),
   created_at: z.string(),
 });
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;

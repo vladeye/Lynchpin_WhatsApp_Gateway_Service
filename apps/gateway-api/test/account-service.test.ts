@@ -4,10 +4,13 @@ import {
   AccountNotConnectedError,
   AccountService,
 } from "../src/services/account.service";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   InMemoryAccountRepository,
   InMemoryMessageRepository,
 } from "../src/stores/memory";
+import { MediaStore } from "../src/services/media-store.service";
 import type { BaileysManager } from "../src/services/baileys-manager.service";
 
 function fakeManager(): BaileysManager {
@@ -29,6 +32,7 @@ function setup() {
     messageRepo,
     fakeManager(),
     "/tmp/sessions",
+    new MediaStore(path.join(tmpdir(), "lp-test-media")),
   );
   return { accountRepo, messageRepo, service };
 }

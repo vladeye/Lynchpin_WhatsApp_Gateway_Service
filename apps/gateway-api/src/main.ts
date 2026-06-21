@@ -8,6 +8,7 @@ import { PgMessageRepository } from "./stores/message.repository";
 import { PgWebhookRepository } from "./stores/webhook.repository";
 import { WebhookDispatcher } from "./services/webhook-dispatch.service";
 import { BaileysManager } from "./services/baileys-manager.service";
+import { MediaStore } from "./services/media-store.service";
 import { AccountService } from "./services/account.service";
 import { SessionLifecycle } from "./services/session-lifecycle.service";
 import { createBaileysSocket } from "./services/baileys-socket";
@@ -30,12 +31,15 @@ async function main(): Promise<void> {
     logger,
   });
 
+  const mediaStore = new MediaStore(config.MEDIA_ROOT);
+
   const manager = new BaileysManager({
     socketFactory: createBaileysSocket,
     accountRepo,
     messageRepo,
     webhook,
     sessionRoot: config.SESSION_ROOT,
+    mediaStore,
     logger,
   });
 
@@ -44,6 +48,7 @@ async function main(): Promise<void> {
     messageRepo,
     manager,
     config.SESSION_ROOT,
+    mediaStore,
   );
 
   const lifecycle = new SessionLifecycle(accountRepo, manager, logger);

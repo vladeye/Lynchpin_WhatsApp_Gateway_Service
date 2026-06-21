@@ -7,6 +7,7 @@ import {
 import type { AccountRepository, MessageRepository } from "../stores/types";
 import { clearSession } from "../stores/auth-store/file-auth-store";
 import { normalizeInbound } from "./normalizer";
+import type { MediaStore } from "./media-store.service";
 import type { WebhookDispatcher } from "./webhook-dispatch.service";
 import {
   isLoggedOut,
@@ -23,6 +24,7 @@ interface Runtime {
   socket: BaileysSocket;
   stopped: boolean;
   reconnectAttempts: number;
+  downloadMedia?: (msg: BaileysMessage) => Promise<Buffer | null>;
 }
 
 const BACKOFF_MS = [2000, 5000, 15000, 30000, 60000];
@@ -33,6 +35,7 @@ export interface BaileysManagerDeps {
   messageRepo: MessageRepository;
   webhook: WebhookDispatcher;
   sessionRoot: string;
+  mediaStore?: MediaStore;
   logger?: Logger;
 }
 
@@ -69,7 +72,7 @@ export class BaileysManager {
       this.runtimes.delete(accountId);
     }
 
-    const { socket, saveCreds, isRegistered } =
+    const { socket, saveCreds, isRegistered, downloadMedia } =
       await this.deps.socketFactory({
         accountId,
         sessionRoot: this.deps.sessionRoot,
@@ -80,6 +83,7 @@ export class BaileysManager {
       socket,
       stopped: false,
       reconnectAttempts: 0,
+      downloadMedia,
     };
     this.runtimes.set(accountId, runtime);
 
@@ -298,14 +302,28 @@ export class BaileysManager {
     if (event.event !== EVENT_MESSAGE_RECEIVED) return;
     const received = event as MessageReceivedEvent;
     const fromMe = Boolean(msg.key?.fromMe);
+    const id = randomUUID();
+
+    // Download and persist any attachment so the conversation view can show it.
+    const { media } = received.payload.message;
+    const saved = media
+      ? await this.saveMedia(accountId, id, msg, media)
+      : null;
+
     const stored = await this.deps.messageRepo.capture({
-      id: randomUUID(),
+      id,
       gateway_account_id: accountId,
       wa_message_id: received.payload.message.wa_message_id,
       chat_id: received.payload.conversation.chat_id,
       direction: fromMe ? "outbound" : "inbound",
       type: received.payload.message.type,
       body: received.payload.message.text,
+      // media_mime is set only when the file actually downloaded, so the
+      // console can treat it as "renderable media is available".
+      media_path: saved?.relativePath ?? null,
+      media_mime: saved ? (media?.mimetype ?? null) : null,
+      media_filename: saved ? (media?.filename ?? null) : null,
+      media_size: saved?.size ?? null,
       normalized_payload: received,
     });
     if (!stored || fromMe) return; // duplicate, or our own message
@@ -314,8 +332,33 @@ export class BaileysManager {
         "message.received",
         accountId,
         received.payload,
-        received.payload.message.text ?? "(message)",
+        received.payload.message.text ?? `(${received.payload.message.type})`,
       );
+    }
+  }
+
+  /** Download a message's media via the account socket and store it on disk. */
+  private async saveMedia(
+    accountId: string,
+    messageId: string,
+    msg: BaileysMessage,
+    media: { mimetype: string | null; filename: string | null },
+  ): Promise<{ relativePath: string; size: number } | null> {
+    const downloader = this.runtimes.get(accountId)?.downloadMedia;
+    if (!downloader || !this.deps.mediaStore) return null;
+    try {
+      const buffer = await downloader(msg);
+      if (!buffer || buffer.length === 0) return null;
+      return await this.deps.mediaStore.save(
+        accountId,
+        messageId,
+        buffer,
+        media.mimetype,
+        media.filename,
+      );
+    } catch (err) {
+      this.deps.logger?.error({ err, accountId }, "media download/save failed");
+      return null;
     }
   }
 }

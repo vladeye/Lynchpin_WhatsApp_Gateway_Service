@@ -24,12 +24,32 @@ export type Conversation = z.infer<typeof ConversationSchema>;
 export const DirectionSchema = z.enum(["inbound", "outbound"]);
 export type Direction = z.infer<typeof DirectionSchema>;
 
-/** Supported inbound message types (v0.1 handles text; more come later). */
+/** Message content kinds the gateway understands. */
+export const MessageTypeSchema = z.enum([
+  "text",
+  "image",
+  "video",
+  "audio",
+  "document",
+  "sticker",
+]);
+export type MessageType = z.infer<typeof MessageTypeSchema>;
+
+/** Descriptor for a media attachment carried by a message. */
+export const MediaDescriptorSchema = z.object({
+  mimetype: z.string().nullable(),
+  filename: z.string().nullable(),
+  size: z.number().nullable(),
+});
+export type MediaDescriptor = z.infer<typeof MediaDescriptorSchema>;
+
+/** Supported inbound message types. Text carries `text`; media carries `media`. */
 export const InboundMessageSchema = z.object({
   wa_message_id: z.string().min(1),
   direction: z.literal("inbound"),
-  type: z.literal("text"),
+  type: MessageTypeSchema,
   text: z.string().nullable(),
+  media: MediaDescriptorSchema.nullable(),
   timestamp: z.string().datetime(),
 });
 export type InboundMessage = z.infer<typeof InboundMessageSchema>;

@@ -13,6 +13,14 @@ import type {
 } from "../stores/types";
 import { clearSession, sessionDir } from "../stores/auth-store/file-auth-store";
 import type { BaileysManager } from "./baileys-manager.service";
+import type { MediaStore } from "./media-store.service";
+
+/** A media attachment resolved to an absolute path ready to stream. */
+export interface ResolvedMedia {
+  path: string;
+  mime: string | null;
+  filename: string | null;
+}
 
 export class AccountExistsError extends Error {}
 export class AccountNotFoundError extends Error {}
@@ -45,6 +53,7 @@ export class AccountService {
     private readonly messageRepo: MessageRepository,
     private readonly manager: BaileysManager,
     private readonly sessionRoot: string,
+    private readonly mediaStore: MediaStore,
   ) {}
 
   async list(): Promise<Account[]> {
@@ -69,6 +78,18 @@ export class AccountService {
   async listMessages(id: string, chatId: string): Promise<ChatMessage[]> {
     await this.require(id);
     return this.messageRepo.listMessages(id, chatId, 300);
+  }
+
+  /** Resolve a stored media attachment to an absolute path for streaming. */
+  async getMedia(id: string, messageId: string): Promise<ResolvedMedia | null> {
+    await this.require(id);
+    const ref = await this.messageRepo.getMediaRef(id, messageId);
+    if (!ref) return null;
+    return {
+      path: this.mediaStore.resolve(ref.media_path),
+      mime: ref.media_mime,
+      filename: ref.media_filename,
+    };
   }
 
   async create(input: {

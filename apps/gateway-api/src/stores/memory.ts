@@ -9,6 +9,7 @@ import type {
   AccountUpdate,
   CapturedMessageRow,
   CreateAccountRecord,
+  MediaRef,
   MessageRepository,
   OutboundMessageRow,
   WebhookRecord,
@@ -77,6 +78,9 @@ interface StoredMessage {
   direction: string;
   type: string;
   body: string | null;
+  media_path: string | null;
+  media_mime: string | null;
+  media_filename: string | null;
   created_at: string;
 }
 
@@ -97,6 +101,9 @@ export class InMemoryMessageRepository implements MessageRepository {
       direction: row.direction,
       type: row.type,
       body: row.body,
+      media_path: row.media_path ?? null,
+      media_mime: row.media_mime ?? null,
+      media_filename: row.media_filename ?? null,
       created_at: new Date().toISOString(),
     };
     this.captured.push(stored);
@@ -114,6 +121,9 @@ export class InMemoryMessageRepository implements MessageRepository {
       direction: "outbound",
       type: row.type,
       body: row.body,
+      media_path: null,
+      media_mime: null,
+      media_filename: null,
       created_at: new Date().toISOString(),
     });
     return { duplicate: false };
@@ -126,6 +136,24 @@ export class InMemoryMessageRepository implements MessageRepository {
   async setOutboundWaId(requestId: string, waMessageId: string): Promise<void> {
     const row = this.outbound.get(requestId);
     if (row) row.wa_message_id = waMessageId;
+  }
+
+  async getMediaRef(
+    accountId: string,
+    messageId: string,
+  ): Promise<MediaRef | null> {
+    const m = this.all.find(
+      (x) =>
+        x.gateway_account_id === accountId &&
+        x.id === messageId &&
+        x.media_path,
+    );
+    if (!m || !m.media_path) return null;
+    return {
+      media_path: m.media_path,
+      media_mime: m.media_mime,
+      media_filename: m.media_filename,
+    };
   }
 
   async listChats(accountId: string, limit: number): Promise<ChatSummary[]> {
@@ -142,6 +170,7 @@ export class InMemoryMessageRepository implements MessageRepository {
         contact_name: null,
         is_self: false,
         last_body: m.body,
+        last_type: m.type,
         last_direction: m.direction,
         last_at: m.created_at,
       }));
@@ -162,6 +191,8 @@ export class InMemoryMessageRepository implements MessageRepository {
         direction: m.direction,
         type: m.type,
         body: m.body,
+        media_mime: m.media_mime,
+        media_filename: m.media_filename,
         created_at: m.created_at,
       }));
   }

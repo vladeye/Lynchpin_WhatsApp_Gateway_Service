@@ -1,11 +1,97 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
-import type { ChatSummary } from "@lynchpin-whatsapp-gateway/shared-types";
+import type {
+  ChatMessage,
+  ChatSummary,
+} from "@lynchpin-whatsapp-gateway/shared-types";
 import { api } from "../lib/api";
 
 function phoneOf(chatId: string): string {
   return chatId.split("@")[0] ?? chatId;
+}
+
+/** Emoji label for a media message type (used when there's no caption). */
+const TYPE_LABEL: Record<string, string> = {
+  image: "📷 Photo",
+  video: "🎞️ Video",
+  audio: "🎧 Audio",
+  document: "📄 Document",
+  sticker: "🌟 Sticker",
+};
+
+/** Preview line for the chat list: caption, or a media label, or a dash. */
+function previewText(c: ChatSummary): string {
+  if (c.last_body) return c.last_body;
+  if (c.last_type && TYPE_LABEL[c.last_type]) return TYPE_LABEL[c.last_type]!;
+  return "—";
+}
+
+/** Renders a message's content: media (image/video/audio/file) or text. */
+function MessageBody({
+  accountId,
+  m,
+  outbound,
+}: {
+  accountId: string;
+  m: ChatMessage;
+  outbound: boolean;
+}) {
+  const caption = m.body ? <div className="mt-1">{m.body}</div> : null;
+
+  // media_mime is only set when the binary downloaded and can be served.
+  if (m.media_mime) {
+    const url = api.mediaUrl(accountId, m.id);
+    if (m.media_mime.startsWith("image/")) {
+      return (
+        <a href={url} target="_blank" rel="noreferrer" className="block">
+          <img
+            src={url}
+            alt={m.media_filename ?? "image"}
+            loading="lazy"
+            className="max-h-64 max-w-full rounded-lg"
+          />
+          {caption}
+        </a>
+      );
+    }
+    if (m.media_mime.startsWith("video/")) {
+      return (
+        <div>
+          <video src={url} controls className="max-h-64 max-w-full rounded-lg" />
+          {caption}
+        </div>
+      );
+    }
+    if (m.media_mime.startsWith("audio/")) {
+      return <audio src={url} controls className="w-56 max-w-full" />;
+    }
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className={`flex items-center gap-2 underline ${
+          outbound ? "text-white" : "text-brand-700"
+        }`}
+      >
+        <span>📎</span>
+        <span className="truncate">{m.media_filename ?? "Download file"}</span>
+      </a>
+    );
+  }
+
+  // Media type but the file isn't available (download failed / not synced yet).
+  if (TYPE_LABEL[m.type]) {
+    return (
+      <div>
+        <span className="opacity-80">{TYPE_LABEL[m.type]}</span>
+        {caption}
+      </div>
+    );
+  }
+
+  return <div>{m.body ?? `(${m.type})`}</div>;
 }
 
 /** Friendly label: self-chat, known contact name, phone, or generic. */
@@ -116,7 +202,7 @@ export function ConversationsPage() {
               </div>
               <div className="truncate text-xs text-slate-500">
                 {c.last_direction === "outbound" ? "You: " : ""}
-                {c.last_body ?? "—"}
+                {previewText(c)}
               </div>
             </button>
           ))}
@@ -149,7 +235,11 @@ export function ConversationsPage() {
                           : "bg-white text-slate-800"
                       }`}
                     >
-                      <div>{m.body ?? `(${m.type})`}</div>
+                      <MessageBody
+                        accountId={id}
+                        m={m}
+                        outbound={m.direction === "outbound"}
+                      />
                       <div
                         className={`mt-1 text-[10px] ${m.direction === "outbound" ? "text-brand-50" : "text-slate-400"}`}
                       >

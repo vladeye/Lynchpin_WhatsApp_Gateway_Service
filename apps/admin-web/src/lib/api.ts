@@ -75,6 +75,9 @@ export const api = {
     getJson<{ messages: ChatMessage[] }>(
       `/api/accounts/${id}/chats/${encodeURIComponent(chatId)}/messages`,
     ).then((r) => r.messages),
+  /** URL of a message's media attachment (image/video/audio/document). */
+  mediaUrl: (id: string, messageId: string) =>
+    `/api/accounts/${id}/media/${messageId}`,
   sendChatMessage: (id: string, chatId: string, text: string) =>
     send("/api/messages/send", "POST", {
       request_id: crypto.randomUUID(),
