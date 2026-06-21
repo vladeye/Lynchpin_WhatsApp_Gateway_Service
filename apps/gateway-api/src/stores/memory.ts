@@ -7,8 +7,8 @@ import type {
   AccountRecord,
   AccountRepository,
   AccountUpdate,
+  CapturedMessageRow,
   CreateAccountRecord,
-  InboundMessageRow,
   MessageRepository,
   OutboundMessageRow,
   WebhookRecord,
@@ -80,25 +80,26 @@ interface StoredMessage {
 }
 
 export class InMemoryMessageRepository implements MessageRepository {
-  readonly inbound: InboundMessageRow[] = [];
+  readonly captured: StoredMessage[] = [];
   readonly outbound = new Map<string, OutboundMessageRow>();
   private readonly all: StoredMessage[] = [];
   private readonly seen = new Set<string>();
 
-  async insertInbound(row: InboundMessageRow): Promise<boolean> {
+  async capture(row: CapturedMessageRow): Promise<boolean> {
     const key = `${row.gateway_account_id}:${row.wa_message_id}`;
     if (row.wa_message_id && this.seen.has(key)) return false;
     if (row.wa_message_id) this.seen.add(key);
-    this.inbound.push(row);
-    this.all.push({
+    const stored: StoredMessage = {
       id: row.id,
       gateway_account_id: row.gateway_account_id,
       chat_id: row.chat_id,
-      direction: "inbound",
+      direction: row.direction,
       type: row.type,
       body: row.body,
       created_at: new Date().toISOString(),
-    });
+    };
+    this.captured.push(stored);
+    this.all.push(stored);
     return true;
   }
 

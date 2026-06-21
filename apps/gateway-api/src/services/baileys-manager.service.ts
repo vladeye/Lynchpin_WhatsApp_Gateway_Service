@@ -152,6 +152,20 @@ export class BaileysManager {
   ): Promise<void> {
     const runtime = this.runtimes.get(accountId);
 
+    this.deps.logger?.info(
+      {
+        accountId,
+        connection: u.connection,
+        hasQr: Boolean(u.qr),
+        statusCode: (
+          u.lastDisconnect?.error as
+            | { output?: { statusCode?: number } }
+            | undefined
+        )?.output?.statusCode,
+      },
+      "connection.update",
+    );
+
     if (u.qr) {
       await this.deps.accountRepo.update(accountId, {
         state: "waiting_qr",
@@ -232,22 +246,38 @@ export class BaileysManager {
     accountId: string,
     upsert: MessagesUpsert,
   ): Promise<void> {
+    this.deps.logger?.info(
+      {
+        accountId,
+        type: upsert.type,
+        count: upsert.messages.length,
+        fromMe: upsert.messages.map((m) => Boolean(m.key?.fromMe)),
+        keys: upsert.messages.map((m) =>
+          m.message ? Object.keys(m.message) : null,
+        ),
+      },
+      "messages.upsert",
+    );
     if (upsert.type !== "notify") return;
     for (const msg of upsert.messages) {
-      if (msg.key?.fromMe) continue;
       const event = normalizeInbound(accountId, msg);
       if (event.event !== EVENT_MESSAGE_RECEIVED) continue;
       const received = event as MessageReceivedEvent;
-      const stored = await this.deps.messageRepo.insertInbound({
+      const fromMe = Boolean(msg.key?.fromMe);
+      // Capture both directions so the conversation view mirrors WhatsApp;
+      // fromMe messages (sent from the phone/other devices, or echoed from our
+      // own sends) are stored as outbound and deduped by wa_message_id.
+      const stored = await this.deps.messageRepo.capture({
         id: randomUUID(),
         gateway_account_id: accountId,
         wa_message_id: received.payload.message.wa_message_id,
         chat_id: received.payload.conversation.chat_id,
+        direction: fromMe ? "outbound" : "inbound",
         type: received.payload.message.type,
         body: received.payload.message.text,
         normalized_payload: received,
       });
-      if (!stored) continue; // duplicate
+      if (!stored || fromMe) continue; // duplicate, or our own message
       await this.deps.webhook.emit(
         "message.received",
         accountId,

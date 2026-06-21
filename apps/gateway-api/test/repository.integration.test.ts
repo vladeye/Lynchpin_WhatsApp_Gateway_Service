@@ -60,12 +60,13 @@ describe.skipIf(!DB)("Postgres repositories", () => {
       gateway_account_id: acc.id,
       wa_message_id: "WA-DUP",
       chat_id: "c@s.whatsapp.net",
+      direction: "inbound" as const,
       type: "text",
       body: "hi",
       normalized_payload: { a: 1 },
     };
-    expect(await messages.insertInbound(row)).toBe(true);
-    expect(await messages.insertInbound({ ...row, id: randomUUID() })).toBe(false);
+    expect(await messages.capture(row)).toBe(true);
+    expect(await messages.capture({ ...row, id: randomUUID() })).toBe(false);
     await accounts.delete(acc.id);
   });
 

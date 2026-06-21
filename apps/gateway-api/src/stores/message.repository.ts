@@ -4,7 +4,7 @@ import type {
   ChatSummary,
 } from "@lynchpin-whatsapp-gateway/shared-types";
 import type {
-  InboundMessageRow,
+  CapturedMessageRow,
   MessageRepository,
   OutboundMessageRow,
 } from "./types";
@@ -12,11 +12,12 @@ import type {
 export class PgMessageRepository implements MessageRepository {
   constructor(private readonly pool: Pool) {}
 
-  async insertInbound(row: InboundMessageRow): Promise<boolean> {
+  async capture(row: CapturedMessageRow): Promise<boolean> {
     const res = await this.pool.query(
       `INSERT INTO gateway_messages
          (id, gateway_account_id, wa_message_id, chat_id, direction, type, body, status, normalized_payload)
-       VALUES ($1, $2, $3, $4, 'inbound', $5, $6, 'received', $7)
+       VALUES ($1, $2, $3, $4, $5, $6, $7,
+               CASE WHEN $5 = 'inbound' THEN 'received' ELSE 'sent' END, $8)
        ON CONFLICT (gateway_account_id, wa_message_id) WHERE wa_message_id IS NOT NULL
        DO NOTHING`,
       [
@@ -24,6 +25,7 @@ export class PgMessageRepository implements MessageRepository {
         row.gateway_account_id,
         row.wa_message_id,
         row.chat_id,
+        row.direction,
         row.type,
         row.body,
         JSON.stringify(row.normalized_payload ?? null),
@@ -62,10 +64,16 @@ export class PgMessageRepository implements MessageRepository {
   }
 
   async setOutboundWaId(requestId: string, waMessageId: string): Promise<void> {
-    await this.pool.query(
-      "UPDATE gateway_messages SET wa_message_id = $2 WHERE request_id = $1",
-      [requestId, waMessageId],
-    );
+    // Tolerate the rare case where the fromMe echo captured this wa_message_id
+    // first (unique index); leaving the request row's wa_message_id null is fine.
+    try {
+      await this.pool.query(
+        "UPDATE gateway_messages SET wa_message_id = $2 WHERE request_id = $1",
+        [requestId, waMessageId],
+      );
+    } catch {
+      // ignore unique-violation race
+    }
   }
 
   async listChats(accountId: string, limit: number): Promise<ChatSummary[]> {
