@@ -20,9 +20,13 @@ async function getJson<T>(path: string): Promise<T> {
 }
 
 async function send<T>(path: string, method: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  // Only declare a JSON content-type when a body is actually sent; Fastify
+  // rejects an empty body that claims application/json (400).
+  if (body !== undefined) headers["content-type"] = "application/json";
   const res = await fetch(path, {
     method,
-    headers: { "content-type": "application/json", Accept: "application/json" },
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const json = (await res.json().catch(() => ({}))) as T & {
