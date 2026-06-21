@@ -180,6 +180,7 @@ export class BaileysManager {
         state: "connected",
         phone_number: phone,
         display_name: runtime?.socket.user?.name ?? null,
+        self_lid: runtime?.socket.user?.lid ?? null,
         last_qr: null,
         last_error: null,
         last_connected_at: new Date().toISOString(),
@@ -258,7 +259,7 @@ export class BaileysManager {
       },
       "messages.upsert",
     );
-    if (upsert.type !== "notify") return;
+    if (upsert.type !== "notify" && upsert.type !== "append") return;
     for (const msg of upsert.messages) {
       const event = normalizeInbound(accountId, msg);
       if (event.event !== EVENT_MESSAGE_RECEIVED) continue;

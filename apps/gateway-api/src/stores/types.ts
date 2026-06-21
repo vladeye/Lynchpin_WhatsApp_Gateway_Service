@@ -13,6 +13,7 @@ export interface AccountRecord {
   phone_number: string | null;
   display_name: string | null;
   session_path: string;
+  self_lid: string | null;
   last_qr: string | null;
   last_error: string | null;
   created_at: string;
@@ -28,6 +29,7 @@ export type AccountUpdate = Partial<
     | "state"
     | "phone_number"
     | "display_name"
+    | "self_lid"
     | "last_qr"
     | "last_error"
     | "last_connected_at"

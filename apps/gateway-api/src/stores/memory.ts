@@ -29,6 +29,7 @@ export class InMemoryAccountRepository implements AccountRepository {
       phone_number: null,
       display_name: null,
       session_path: input.session_path,
+      self_lid: null,
       last_qr: null,
       last_error: null,
       created_at: now,
@@ -139,6 +140,7 @@ export class InMemoryMessageRepository implements MessageRepository {
       .map((m) => ({
         chat_id: m.chat_id,
         contact_name: null,
+        is_self: false,
         last_body: m.body,
         last_direction: m.direction,
         last_at: m.created_at,

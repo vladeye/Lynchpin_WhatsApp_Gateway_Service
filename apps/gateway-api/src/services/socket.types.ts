@@ -18,7 +18,11 @@ export interface BaileysSocket {
     on(event: "creds.update", listener: () => void): void;
     on(event: "messages.upsert", listener: (m: MessagesUpsert) => void): void;
   };
-  user?: { id?: string | null; name?: string | null } | null;
+  user?: {
+    id?: string | null;
+    name?: string | null;
+    lid?: string | null;
+  } | null;
   requestPairingCode(phoneNumber: string): Promise<string>;
   sendMessage(
     jid: string,
