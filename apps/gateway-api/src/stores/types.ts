@@ -52,11 +52,12 @@ export interface AccountRepository {
   delete(id: string): Promise<boolean>;
 }
 
-export interface InboundMessageRow {
+export interface CapturedMessageRow {
   id: string;
   gateway_account_id: string;
   wa_message_id: string | null;
   chat_id: string;
+  direction: "inbound" | "outbound";
   type: string;
   body: string | null;
   normalized_payload: unknown;
@@ -73,8 +74,8 @@ export interface OutboundMessageRow {
 }
 
 export interface MessageRepository {
-  /** Insert an inbound message; returns false if it was a duplicate. */
-  insertInbound(row: InboundMessageRow): Promise<boolean>;
+  /** Store an observed message (inbound or fromMe), deduped by wa_message_id. */
+  capture(row: CapturedMessageRow): Promise<boolean>;
   /** Insert an outbound message keyed by request_id (idempotent). */
   insertOutbound(row: OutboundMessageRow): Promise<{ duplicate: boolean }>;
   getByRequestId(requestId: string): Promise<OutboundMessageRow | null>;

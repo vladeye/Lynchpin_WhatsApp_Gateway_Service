@@ -122,9 +122,46 @@ describe("BaileysManager", () => {
     await tick();
     fake.emit("messages.upsert", upsert); // duplicate
     await tick();
-    expect(messageRepo.inbound).toHaveLength(1);
+    const msgs = await messageRepo.listMessages(
+      "a1",
+      "573001112233@s.whatsapp.net",
+      10,
+    );
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]?.direction).toBe("inbound");
     const events = await webhookRepo.listRecent(10);
     expect(events.filter((e) => e.event_type === "message.received")).toHaveLength(1);
+  });
+
+  it("captures fromMe messages as outbound without a webhook", async () => {
+    const { accountRepo, messageRepo, webhookRepo, manager, fake } = setup();
+    await accountRepo.create({
+      id: "a1",
+      external_account_id: "x1",
+      name: "A1",
+      session_path: "/tmp/a1",
+    });
+    await manager.start("a1");
+    fake.emit("messages.upsert", {
+      type: "notify",
+      messages: [
+        {
+          key: { remoteJid: "573009998877@s.whatsapp.net", id: "M2", fromMe: true },
+          message: { conversation: "yo escribí esto" },
+          messageTimestamp: 1700000001,
+        },
+      ],
+    });
+    await tick();
+    const msgs = await messageRepo.listMessages(
+      "a1",
+      "573009998877@s.whatsapp.net",
+      10,
+    );
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]?.direction).toBe("outbound");
+    const events = await webhookRepo.listRecent(10);
+    expect(events.filter((e) => e.event_type === "message.received")).toHaveLength(0);
   });
 
   it("sends text through the socket", async () => {
