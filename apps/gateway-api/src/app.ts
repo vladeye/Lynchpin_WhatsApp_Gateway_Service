@@ -9,12 +9,18 @@ import { accountsRoutes } from "./routes/accounts";
 import { messagesRoutes } from "./routes/messages";
 import { eventsRoutes } from "./routes/events";
 import { parametersRoutes } from "./routes/parameters";
+import { authRoutes } from "./routes/auth";
+import { registerAuthGuard } from "./plugins/auth-guard";
 import type { AccountService } from "./services/account.service";
+import type { AuthService } from "./services/auth.service";
+import type { SettingsService } from "./services/settings.service";
 import type { WebhookRepository } from "./stores/types";
 import type { Config } from "./config";
 
 export interface AppDeps {
   accountService: AccountService;
+  authService: AuthService;
+  settings: SettingsService;
   webhookRepo: WebhookRepository;
   config: Config;
 }
@@ -47,11 +53,18 @@ export async function buildApp(
   await app.register(healthRoutes);
 
   if (options.deps) {
-    const { accountService, webhookRepo, config } = options.deps;
+    const { accountService, authService, settings, webhookRepo, config } =
+      options.deps;
+    registerAuthGuard(app, authService, settings);
+    await app.register(
+      authRoutes(authService, settings, {
+        secureCookie: config.NODE_ENV === "production",
+      }),
+    );
     await app.register(accountsRoutes(accountService));
     await app.register(messagesRoutes(accountService));
     await app.register(eventsRoutes(webhookRepo));
-    await app.register(parametersRoutes(config));
+    await app.register(parametersRoutes(settings));
   }
 
   const distDir = options.staticDir ?? defaultStaticDir();

@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "../lib/api";
 
 const features = [
   "Multi-account WhatsApp management",
@@ -10,12 +12,26 @@ const features = [
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const [showPassword, setShowPassword] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  function onSubmit(e: FormEvent) {
+  async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    // Auth backend is not wired yet — this is the console foundation.
-    navigate("/dashboard");
+    setError(null);
+    setBusy(true);
+    try {
+      await api.login(username, password);
+      await qc.invalidateQueries({ queryKey: ["me"] });
+      navigate("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -60,7 +76,9 @@ export function LoginPage() {
               <input
                 type="text"
                 autoComplete="username"
-                placeholder="Enter your email or username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter your username"
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
               />
             </div>
@@ -73,6 +91,8 @@ export function LoginPage() {
                 <input
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   className="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-10 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                 />
@@ -87,30 +107,19 @@ export function LoginPage() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700">
-                MFA Code
-              </label>
-              <input
-                inputMode="numeric"
-                maxLength={6}
-                placeholder="Enter 6-digit code"
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-              />
-            </div>
+            {error && (
+              <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </div>
+            )}
 
             <button
               type="submit"
-              className="w-full rounded-lg bg-brand-600 px-4 py-3 font-semibold text-white hover:bg-brand-700 transition-colors"
+              disabled={busy || !username || !password}
+              className="w-full rounded-lg bg-brand-600 px-4 py-3 font-semibold text-white hover:bg-brand-700 transition-colors disabled:opacity-60"
             >
-              Sign In
+              {busy ? "Signing in…" : "Sign In"}
             </button>
-
-            <div className="text-center">
-              <a className="text-sm text-brand-600 hover:underline" href="#">
-                Forgot password?
-              </a>
-            </div>
           </form>
 
           <div className="mt-6 border-t border-slate-100 pt-4 flex items-center justify-between text-sm text-slate-500">

@@ -27,6 +27,7 @@ const silentLogger = pino({ level: "silent" });
 export async function createBaileysSocket({
   accountId,
   sessionRoot,
+  syncFullHistory = true,
 }: SocketCreateArgs): Promise<CreatedSocket> {
   const { state, saveCreds } = await loadFileAuthState(sessionRoot, accountId);
   const { version } = await fetchLatestBaileysVersion();
@@ -40,8 +41,9 @@ export async function createBaileysSocket({
     logger: pino({ level: process.env.BAILEYS_LOG_LEVEL ?? "silent" }),
     browser: ["Lynchpin Gateway", "Chrome", "1.0.0"],
     // Request message history on connect so the conversation view can backfill
-    // past chats (delivered via the messaging-history.set event).
-    syncFullHistory: true,
+    // past chats (delivered via the messaging-history.set event). Controlled by
+    // the editable "sync_full_history" setting; applies to new connections.
+    syncFullHistory,
   });
 
   return {

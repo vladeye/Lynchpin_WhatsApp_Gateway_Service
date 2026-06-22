@@ -9,8 +9,11 @@ import path from "node:path";
 import {
   InMemoryAccountRepository,
   InMemoryMessageRepository,
+  InMemorySettingsRepository,
 } from "../src/stores/memory";
 import { MediaStore } from "../src/services/media-store.service";
+import { SettingsService } from "../src/services/settings.service";
+import { loadConfig } from "../src/config";
 import type { BaileysManager } from "../src/services/baileys-manager.service";
 
 function fakeManager(): BaileysManager {
@@ -27,12 +30,17 @@ function fakeManager(): BaileysManager {
 function setup() {
   const accountRepo = new InMemoryAccountRepository();
   const messageRepo = new InMemoryMessageRepository();
+  const settings = new SettingsService(
+    new InMemorySettingsRepository(),
+    loadConfig({ ...process.env, DATABASE_URL: undefined }),
+  );
   const service = new AccountService(
     accountRepo,
     messageRepo,
     fakeManager(),
     "/tmp/sessions",
     new MediaStore(path.join(tmpdir(), "lp-test-media")),
+    settings,
   );
   return { accountRepo, messageRepo, service };
 }

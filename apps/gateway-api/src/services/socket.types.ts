@@ -43,6 +43,8 @@ export interface BaileysSocket {
 export interface SocketCreateArgs {
   accountId: string;
   sessionRoot: string;
+  /** Whether to request full history sync on connect (editable setting). */
+  syncFullHistory?: boolean;
 }
 
 export interface CreatedSocket {

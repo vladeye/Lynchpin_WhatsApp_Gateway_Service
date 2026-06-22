@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import "./index.css";
 import { Layout } from "./components/Layout";
+import { RequireAuth } from "./components/RequireAuth";
 import { LoginPage } from "./pages/Login";
 import { DashboardPage } from "./pages/Dashboard";
 import { AccountsPage } from "./pages/Accounts";
@@ -17,7 +18,11 @@ const queryClient = new QueryClient();
 const router = createBrowserRouter([
   { path: "/", element: <LoginPage /> },
   {
-    element: <Layout />,
+    element: (
+      <RequireAuth>
+        <Layout />
+      </RequireAuth>
+    ),
     children: [
       { path: "/dashboard", element: <DashboardPage /> },
       { path: "/accounts", element: <AccountsPage /> },

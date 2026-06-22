@@ -1,17 +1,23 @@
 import type {
   ChatMessage,
   ChatSummary,
+  EventLogDetail,
   EventLogItem,
 } from "@lynchpin-whatsapp-gateway/shared-types";
 import type {
   AccountRecord,
   AccountRepository,
   AccountUpdate,
+  AdminRecord,
+  AdminRepository,
   CapturedMessageRow,
   CreateAccountRecord,
+  EventListFilter,
   MediaRef,
   MessageRepository,
   OutboundMessageRow,
+  SettingRow,
+  SettingsRepository,
   WebhookRecord,
   WebhookRepository,
 } from "./types";
@@ -198,37 +204,139 @@ export class InMemoryMessageRepository implements MessageRepository {
   }
 }
 
+interface StoredWebhook extends WebhookRecord {
+  status: string;
+  attempts: number;
+  last_error: string | null;
+  delivered_at: string | null;
+  created_at: string;
+}
+
 export class InMemoryWebhookRepository implements WebhookRepository {
-  readonly records: (WebhookRecord & { status: string; attempts: number })[] = [];
+  readonly records: StoredWebhook[] = [];
 
   async record(input: WebhookRecord): Promise<void> {
-    this.records.push({ ...input, status: "pending", attempts: 0 });
+    this.records.push({
+      ...input,
+      status: "pending",
+      attempts: 0,
+      last_error: null,
+      delivered_at: null,
+      created_at: new Date().toISOString(),
+    });
   }
 
   async updateStatus(
     id: string,
     status: string,
     attempts: number,
+    lastError: string | null = null,
+    delivered = false,
   ): Promise<void> {
     const rec = this.records.find((r) => r.id === id);
     if (rec) {
       rec.status = status;
       rec.attempts = attempts;
+      rec.last_error = lastError;
+      if (delivered) rec.delivered_at = new Date().toISOString();
     }
   }
 
+  private toItem(r: StoredWebhook): EventLogItem {
+    return {
+      id: r.id,
+      event_type: r.event_type,
+      gateway_account_id: r.gateway_account_id,
+      status: r.status,
+      attempts: r.attempts,
+      message: r.message,
+      created_at: r.created_at,
+    };
+  }
+
+  private match(r: StoredWebhook, filter: EventListFilter): boolean {
+    if (filter.eventType && r.event_type !== filter.eventType) return false;
+    if (filter.status && r.status !== filter.status) return false;
+    return true;
+  }
+
   async listRecent(limit: number): Promise<EventLogItem[]> {
+    return this.list({ limit, offset: 0 });
+  }
+
+  async list(filter: EventListFilter): Promise<EventLogItem[]> {
     return this.records
-      .slice(-limit)
+      .filter((r) => this.match(r, filter))
       .reverse()
-      .map((r) => ({
-        id: r.id,
-        event_type: r.event_type,
-        gateway_account_id: r.gateway_account_id,
-        status: r.status,
-        attempts: r.attempts,
-        message: r.message,
-        created_at: new Date().toISOString(),
-      }));
+      .slice(filter.offset, filter.offset + filter.limit)
+      .map((r) => this.toItem(r));
+  }
+
+  async count(filter: EventListFilter): Promise<number> {
+    return this.records.filter((r) => this.match(r, filter)).length;
+  }
+
+  async getById(id: string): Promise<EventLogDetail | null> {
+    const r = this.records.find((x) => x.id === id);
+    if (!r) return null;
+    return {
+      ...this.toItem(r),
+      payload: r.payload,
+      last_error: r.last_error,
+      target_url: null,
+      delivered_at: r.delivered_at,
+    };
+  }
+
+  async distinctEventTypes(): Promise<string[]> {
+    return [...new Set(this.records.map((r) => r.event_type))].sort();
+  }
+}
+
+export class InMemoryAdminRepository implements AdminRepository {
+  private readonly byUsername = new Map<string, AdminRecord>();
+
+  async getByUsername(username: string): Promise<AdminRecord | null> {
+    const rec = this.byUsername.get(username);
+    return rec ? { ...rec } : null;
+  }
+
+  async create(input: {
+    id: string;
+    username: string;
+    password_hash: string;
+  }): Promise<AdminRecord> {
+    const now = new Date().toISOString();
+    const rec: AdminRecord = { ...input, created_at: now, updated_at: now };
+    this.byUsername.set(rec.username, rec);
+    return { ...rec };
+  }
+
+  async updatePassword(username: string, passwordHash: string): Promise<void> {
+    const rec = this.byUsername.get(username);
+    if (rec) {
+      rec.password_hash = passwordHash;
+      rec.updated_at = new Date().toISOString();
+    }
+  }
+
+  async count(): Promise<number> {
+    return this.byUsername.size;
+  }
+}
+
+export class InMemorySettingsRepository implements SettingsRepository {
+  private readonly store = new Map<string, string>();
+
+  async getAll(): Promise<SettingRow[]> {
+    return [...this.store.entries()].map(([key, value]) => ({ key, value }));
+  }
+
+  async get(key: string): Promise<string | null> {
+    return this.store.get(key) ?? null;
+  }
+
+  async set(key: string, value: string): Promise<void> {
+    this.store.set(key, value);
   }
 }

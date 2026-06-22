@@ -5,6 +5,8 @@ import type { WebhookRepository } from "../stores/types";
 
 export interface WebhookDispatchOptions {
   baseUrl?: string;
+  /** Live override for the target URL (e.g. editable Parameters setting). */
+  baseUrlProvider?: () => string | undefined;
   secret?: string;
   logger?: Logger;
   /** Injectable for tests; defaults to global fetch. */
@@ -17,6 +19,7 @@ export interface WebhookDispatchOptions {
  */
 export class WebhookDispatcher {
   private readonly baseUrl?: string;
+  private readonly baseUrlProvider?: () => string | undefined;
   private readonly secret?: string;
   private readonly logger?: Logger;
   private readonly fetchImpl: typeof fetch;
@@ -26,6 +29,7 @@ export class WebhookDispatcher {
     options: WebhookDispatchOptions = {},
   ) {
     this.baseUrl = options.baseUrl;
+    this.baseUrlProvider = options.baseUrlProvider;
     this.secret = options.secret;
     this.logger = options.logger;
     this.fetchImpl = options.fetchImpl ?? fetch;
@@ -46,7 +50,8 @@ export class WebhookDispatcher {
       message: summary ?? null,
     });
 
-    if (!this.baseUrl) {
+    const baseUrl = this.baseUrlProvider?.() ?? this.baseUrl;
+    if (!baseUrl) {
       await this.repo.updateStatus(id, "skipped", 0, null, false);
       return;
     }
@@ -66,7 +71,7 @@ export class WebhookDispatcher {
       if (this.secret) {
         headers["X-Webhook-Signature"] = hmacSign(body, this.secret);
       }
-      const res = await this.fetchImpl(this.baseUrl, {
+      const res = await this.fetchImpl(baseUrl, {
         method: "POST",
         headers,
         body,
