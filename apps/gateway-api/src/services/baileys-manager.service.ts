@@ -36,6 +36,8 @@ export interface BaileysManagerDeps {
   webhook: WebhookDispatcher;
   sessionRoot: string;
   mediaStore?: MediaStore;
+  /** Live provider for the "sync full history" setting (per new connection). */
+  syncFullHistory?: () => boolean;
   logger?: Logger;
 }
 
@@ -76,6 +78,7 @@ export class BaileysManager {
       await this.deps.socketFactory({
         accountId,
         sessionRoot: this.deps.sessionRoot,
+        syncFullHistory: this.deps.syncFullHistory?.() ?? true,
       });
 
     const runtime: Runtime = {

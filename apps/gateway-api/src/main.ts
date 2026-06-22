@@ -6,10 +6,14 @@ import { runMigrations } from "./db/migrate";
 import { PgAccountRepository } from "./stores/account.repository";
 import { PgMessageRepository } from "./stores/message.repository";
 import { PgWebhookRepository } from "./stores/webhook.repository";
+import { PgAdminRepository } from "./stores/admin.repository";
+import { PgSettingsRepository } from "./stores/settings.repository";
 import { WebhookDispatcher } from "./services/webhook-dispatch.service";
 import { BaileysManager } from "./services/baileys-manager.service";
 import { MediaStore } from "./services/media-store.service";
 import { AccountService } from "./services/account.service";
+import { AuthService } from "./services/auth.service";
+import { SettingsService } from "./services/settings.service";
 import { SessionLifecycle } from "./services/session-lifecycle.service";
 import { createBaileysSocket } from "./services/baileys-socket";
 
@@ -24,9 +28,21 @@ async function main(): Promise<void> {
   const accountRepo = new PgAccountRepository(pool);
   const messageRepo = new PgMessageRepository(pool);
   const webhookRepo = new PgWebhookRepository(pool);
+  const adminRepo = new PgAdminRepository(pool);
+  const settingsRepo = new PgSettingsRepository(pool);
+
+  const settings = new SettingsService(settingsRepo, config, logger);
+  await settings.load();
+
+  const authService = new AuthService(adminRepo, {
+    secret: config.AUTH_SECRET ?? config.WEBHOOK_SECRET ?? "insecure-dev-secret",
+    ttlSeconds: config.AUTH_TOKEN_TTL_HOURS * 3600,
+    logger,
+  });
+  await authService.seedAdmin(config.ADMIN_USERNAME, config.ADMIN_PASSWORD);
 
   const webhook = new WebhookDispatcher(webhookRepo, {
-    baseUrl: config.N8N_WEBHOOK_BASE_URL,
+    baseUrlProvider: () => settings.n8nBaseUrl(),
     secret: config.WEBHOOK_SECRET,
     logger,
   });
@@ -40,6 +56,7 @@ async function main(): Promise<void> {
     webhook,
     sessionRoot: config.SESSION_ROOT,
     mediaStore,
+    syncFullHistory: () => settings.syncFullHistory(),
     logger,
   });
 
@@ -49,6 +66,7 @@ async function main(): Promise<void> {
     manager,
     config.SESSION_ROOT,
     mediaStore,
+    settings,
   );
 
   const lifecycle = new SessionLifecycle(accountRepo, manager, logger);
@@ -57,7 +75,7 @@ async function main(): Promise<void> {
 
   const app = await buildApp({
     logger: true,
-    deps: { accountService, webhookRepo, config },
+    deps: { accountService, authService, settings, webhookRepo, config },
   });
 
   try {

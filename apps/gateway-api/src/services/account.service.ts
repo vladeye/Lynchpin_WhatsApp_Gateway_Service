@@ -14,6 +14,7 @@ import type {
 import { clearSession, sessionDir } from "../stores/auth-store/file-auth-store";
 import type { BaileysManager } from "./baileys-manager.service";
 import type { MediaStore } from "./media-store.service";
+import type { SettingsService } from "./settings.service";
 
 /** A media attachment resolved to an absolute path ready to stream. */
 export interface ResolvedMedia {
@@ -25,6 +26,7 @@ export interface ResolvedMedia {
 export class AccountExistsError extends Error {}
 export class AccountNotFoundError extends Error {}
 export class AccountNotConnectedError extends Error {}
+export class MessageTooLongError extends Error {}
 
 function toStatus(rec: AccountRecord): AccountStatus {
   return {
@@ -54,6 +56,7 @@ export class AccountService {
     private readonly manager: BaileysManager,
     private readonly sessionRoot: string,
     private readonly mediaStore: MediaStore,
+    private readonly settings: SettingsService,
   ) {}
 
   async list(): Promise<Account[]> {
@@ -162,6 +165,9 @@ export class AccountService {
     if (!rec) throw new AccountNotFoundError(input.gateway_account_id);
     if (rec.state !== "connected") {
       throw new AccountNotConnectedError(input.gateway_account_id);
+    }
+    if (input.text.length > this.settings.maxTextLength()) {
+      throw new MessageTooLongError(input.gateway_account_id);
     }
 
     const { duplicate } = await this.messageRepo.insertOutbound({

@@ -2,6 +2,7 @@ import type {
   AccountState,
   ChatMessage,
   ChatSummary,
+  EventLogDetail,
   EventLogItem,
 } from "@lynchpin-whatsapp-gateway/shared-types";
 
@@ -111,6 +112,14 @@ export interface WebhookRecord {
   message: string | null;
 }
 
+/** Filter + pagination for the Logs event feed. */
+export interface EventListFilter {
+  limit: number;
+  offset: number;
+  eventType?: string;
+  status?: string;
+}
+
 export interface WebhookRepository {
   record(input: WebhookRecord): Promise<void>;
   updateStatus(
@@ -121,4 +130,42 @@ export interface WebhookRepository {
     delivered: boolean,
   ): Promise<void>;
   listRecent(limit: number): Promise<EventLogItem[]>;
+  /** Filtered, paginated list for the Logs screen. */
+  list(filter: EventListFilter): Promise<EventLogItem[]>;
+  /** Total rows matching a filter (ignoring limit/offset). */
+  count(filter: EventListFilter): Promise<number>;
+  /** Full event detail (payload + delivery diagnostics). */
+  getById(id: string): Promise<EventLogDetail | null>;
+  /** Distinct event types present, for the filter dropdown. */
+  distinctEventTypes(): Promise<string[]>;
+}
+
+export interface AdminRecord {
+  id: string;
+  username: string;
+  password_hash: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminRepository {
+  getByUsername(username: string): Promise<AdminRecord | null>;
+  create(input: {
+    id: string;
+    username: string;
+    password_hash: string;
+  }): Promise<AdminRecord>;
+  updatePassword(username: string, passwordHash: string): Promise<void>;
+  count(): Promise<number>;
+}
+
+export interface SettingRow {
+  key: string;
+  value: string;
+}
+
+export interface SettingsRepository {
+  getAll(): Promise<SettingRow[]>;
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<void>;
 }

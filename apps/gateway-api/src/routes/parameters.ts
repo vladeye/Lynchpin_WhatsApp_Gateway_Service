@@ -1,19 +1,42 @@
-import type { FastifyInstance } from "fastify";
-import type { Config } from "../config";
+import type { FastifyInstance, FastifyReply } from "fastify";
+import { UpdateSettingSchema } from "@lynchpin-whatsapp-gateway/shared-types";
+import {
+  SettingValidationError,
+  type SettingsService,
+} from "../services/settings.service";
 
-/** Read-only view of effective gateway configuration (no secrets). */
-export function parametersRoutes(config: Config) {
+function fail(
+  reply: FastifyReply,
+  status: number,
+  code: string,
+  message: string,
+): FastifyReply {
+  return reply.code(status).send({ success: false, error: { code, message } });
+}
+
+/** Effective configuration (read-only) plus editable runtime settings. */
+export function parametersRoutes(settings: SettingsService) {
   return async function register(app: FastifyInstance): Promise<void> {
     app.get("/api/parameters", async () => ({
       success: true,
-      parameters: {
-        environment: config.NODE_ENV,
-        n8n_webhook_base_url: config.N8N_WEBHOOK_BASE_URL ?? null,
-        webhook_signing: Boolean(config.WEBHOOK_SECRET),
-        session_root: config.SESSION_ROOT,
-        max_text_length: config.MAX_TEXT_LENGTH,
-        log_level: config.LOG_LEVEL,
-      },
+      effective: settings.effective(),
+      settings: settings.describe(),
     }));
+
+    app.put("/api/parameters", async (req, reply) => {
+      const parsed = UpdateSettingSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return fail(reply, 400, "INVALID_REQUEST", "key and value required");
+      }
+      try {
+        await settings.set(parsed.data.key, parsed.data.value);
+      } catch (err) {
+        if (err instanceof SettingValidationError) {
+          return fail(reply, 400, "INVALID_SETTING", err.message);
+        }
+        throw err;
+      }
+      return { success: true, settings: settings.describe() };
+    });
   };
 }

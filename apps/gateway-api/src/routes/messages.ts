@@ -3,6 +3,7 @@ import { SendMessageSchema } from "@lynchpin-whatsapp-gateway/shared-types";
 import {
   AccountNotConnectedError,
   AccountNotFoundError,
+  MessageTooLongError,
   type AccountService,
 } from "../services/account.service";
 
@@ -36,6 +37,15 @@ export function messagesRoutes(service: AccountService) {
             error: {
               code: "ACCOUNT_NOT_CONNECTED",
               message: "Account is not connected",
+            },
+          });
+        }
+        if (err instanceof MessageTooLongError) {
+          return reply.code(400).send({
+            success: false,
+            error: {
+              code: "MESSAGE_TOO_LONG",
+              message: "Message exceeds the configured max text length",
             },
           });
         }

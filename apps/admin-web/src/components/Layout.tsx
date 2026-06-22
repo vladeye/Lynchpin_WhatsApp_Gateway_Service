@@ -1,4 +1,6 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "../lib/api";
 
 const nav = [
   { to: "/dashboard", label: "Dashboard" },
@@ -10,6 +12,17 @@ const nav = [
 
 export function Layout() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
+
+  async function signOut() {
+    try {
+      await api.logout();
+    } catch {
+      // ignore — clear client state regardless
+    }
+    qc.clear();
+    navigate("/");
+  }
   return (
     <div className="min-h-full bg-slate-50 flex">
       <aside className="w-60 shrink-0 border-r border-slate-200 bg-white flex flex-col">
@@ -42,7 +55,7 @@ export function Layout() {
           ))}
         </nav>
         <button
-          onClick={() => navigate("/")}
+          onClick={signOut}
           className="m-3 rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-50 text-left"
         >
           Sign out

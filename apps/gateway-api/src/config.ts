@@ -13,6 +13,11 @@ const envSchema = z.object({
     .default("info"),
   GATEWAY_API_KEY: z.string().optional(),
   WEBHOOK_SECRET: z.string().optional(),
+  // Console authentication (single admin). The admin is seeded on first boot.
+  ADMIN_USERNAME: z.string().default("admin"),
+  ADMIN_PASSWORD: z.string().optional(),
+  AUTH_SECRET: z.string().optional(),
+  AUTH_TOKEN_TTL_HOURS: z.coerce.number().int().positive().default(168),
   DATABASE_URL: z.string().optional(),
   SESSION_ROOT: z.string().default("/app/sessions"),
   MEDIA_ROOT: z.string().default("/app/sessions/media"),
