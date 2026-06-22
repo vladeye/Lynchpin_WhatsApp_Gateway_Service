@@ -134,6 +134,41 @@ function isText(content: BaileysMessageContent | null | undefined): boolean {
   );
 }
 
+/**
+ * WhatsApp wraps real content inside containers (disappearing messages, view
+ * once, edits). Drill through them so the inner image/document/text is seen.
+ */
+const WRAPPER_KEYS = [
+  "ephemeralMessage",
+  "viewOnceMessage",
+  "viewOnceMessageV2",
+  "viewOnceMessageV2Extension",
+  "documentWithCaptionMessage",
+  "editedMessage",
+];
+
+function unwrapContent(
+  content: BaileysMessageContent | null,
+): BaileysMessageContent | null {
+  let current = content;
+  for (let depth = 0; depth < 5 && current; depth += 1) {
+    let inner: BaileysMessageContent | null = null;
+    for (const key of WRAPPER_KEYS) {
+      const wrapper = current[key] as
+        | { message?: BaileysMessageContent | null }
+        | null
+        | undefined;
+      if (wrapper?.message) {
+        inner = wrapper.message;
+        break;
+      }
+    }
+    if (!inner) break;
+    current = inner;
+  }
+  return current;
+}
+
 /** First message key (used to label genuinely unsupported types). */
 function firstKey(content: BaileysMessageContent | null | undefined): string {
   if (!content) return "unknown";
@@ -163,33 +198,39 @@ export function normalizeInbound(
   const remoteJid = msg.key.remoteJid ?? "";
   const isGroup = remoteJid.endsWith("@g.us");
   const senderJid = msg.key.participant ?? remoteJid;
-  const content = msg.message ?? null;
+  const content = unwrapContent(msg.message ?? null);
+
+  function unsupported(reason: string): GatewayEvent {
+    return {
+      event_id: eventId,
+      event: EVENT_MESSAGE_UNSUPPORTED,
+      gateway_account_id: gatewayAccountId,
+      occurred_at: occurredAt,
+      payload: { message_type: firstKey(content), reason },
+    };
+  }
 
   let type: MessageType;
   let text: string | null;
   let media: MediaDescriptor | null;
 
-  if (isText(content)) {
-    type = "text";
-    text = extractText(content ?? {});
-    media = null;
-  } else {
-    const detected = detectMedia(content);
-    if (!detected) {
-      return {
-        event_id: eventId,
-        event: EVENT_MESSAGE_UNSUPPORTED,
-        gateway_account_id: gatewayAccountId,
-        occurred_at: occurredAt,
-        payload: {
-          message_type: firstKey(content),
-          reason: "unsupported_message_type",
-        },
-      };
-    }
+  // Media first so captioned attachments are never treated as empty text.
+  const detected = detectMedia(content);
+  if (detected) {
     type = detected.type;
     text = detected.caption;
     media = detected.media;
+  } else if (isText(content)) {
+    type = "text";
+    text = extractText(content ?? {});
+    media = null;
+    // Skip content-less text (reactions, receipts, edits without body) so the
+    // conversation view isn't littered with empty bubbles.
+    if (!text || text.trim() === "") {
+      return unsupported("empty_message");
+    }
+  } else {
+    return unsupported("unsupported_message_type");
   }
 
   return {

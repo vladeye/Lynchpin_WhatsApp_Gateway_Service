@@ -24,6 +24,7 @@ function fakeManager(): BaileysManager {
     reconnect: async () => {},
     isRunning: () => false,
     sendText: async () => "WAID-9",
+    sendMedia: async () => "WAID-MEDIA",
   } as unknown as BaileysManager;
 }
 
@@ -88,5 +89,43 @@ describe("AccountService", () => {
 
     const second = await service.sendMessage(input);
     expect(second.duplicate).toBe(true);
+  });
+
+  it("sends media: stores an outbound row with the saved file", async () => {
+    const { service, accountRepo, messageRepo } = setup();
+    const acc = await service.create({ external_account_id: "x1", name: "A" });
+    await accountRepo.update(acc.id, { state: "connected" });
+
+    const result = await service.sendMediaMessage({
+      request_id: "rm1",
+      gateway_account_id: acc.id,
+      chat_id: "c@s.whatsapp.net",
+      buffer: Buffer.from("PDFDATA"),
+      mimetype: "application/pdf",
+      filename: "doc.pdf",
+      caption: "here",
+    });
+    expect(result.duplicate).toBe(false);
+    expect(result.wa_message_id).toBe("WAID-MEDIA");
+
+    const msgs = await messageRepo.listMessages(acc.id, "c@s.whatsapp.net", 10);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]?.direction).toBe("outbound");
+    expect(msgs[0]?.type).toBe("document");
+    expect(msgs[0]?.media_mime).toBe("application/pdf");
+    const ref = await messageRepo.getMediaRef(acc.id, msgs[0]!.id);
+    expect(ref?.media_path).toBeTruthy();
+
+    // Idempotent on request_id.
+    const again = await service.sendMediaMessage({
+      request_id: "rm1",
+      gateway_account_id: acc.id,
+      chat_id: "c@s.whatsapp.net",
+      buffer: Buffer.from("PDFDATA"),
+      mimetype: "application/pdf",
+      filename: "doc.pdf",
+      caption: "here",
+    });
+    expect(again.duplicate).toBe(true);
   });
 });

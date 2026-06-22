@@ -7,7 +7,7 @@ import {
 import type { AccountRepository, MessageRepository } from "../stores/types";
 import { clearSession } from "../stores/auth-store/file-auth-store";
 import { normalizeInbound } from "./normalizer";
-import type { MediaStore } from "./media-store.service";
+import { mediaKindFromMime, type MediaStore } from "./media-store.service";
 import type { WebhookDispatcher } from "./webhook-dispatch.service";
 import {
   isLoggedOut,
@@ -15,6 +15,7 @@ import {
   type ConnectionUpdate,
   type HistorySet,
   type MessagesUpsert,
+  type OutgoingContent,
   type SocketFactory,
 } from "./socket.types";
 import type { BaileysMessage } from "./normalizer";
@@ -128,6 +129,46 @@ export class BaileysManager {
       throw new Error("ACCOUNT_NOT_CONNECTED");
     }
     const res = await runtime.socket.sendMessage(chatId, { text });
+    return res?.key?.id ?? null;
+  }
+
+  /** Send a media attachment; the content shape is chosen from its mime type. */
+  async sendMedia(
+    accountId: string,
+    chatId: string,
+    file: {
+      buffer: Buffer;
+      mimetype: string | null;
+      filename: string | null;
+      caption?: string | null;
+    },
+  ): Promise<string | null> {
+    const runtime = this.runtimes.get(accountId);
+    if (!runtime) {
+      throw new Error("ACCOUNT_NOT_CONNECTED");
+    }
+    const caption = file.caption || undefined;
+    const mimetype = file.mimetype ?? undefined;
+    let content: OutgoingContent;
+    switch (mediaKindFromMime(file.mimetype)) {
+      case "image":
+        content = { image: file.buffer, caption, mimetype };
+        break;
+      case "video":
+        content = { video: file.buffer, caption, mimetype };
+        break;
+      case "audio":
+        content = { audio: file.buffer, mimetype };
+        break;
+      default:
+        content = {
+          document: file.buffer,
+          mimetype,
+          fileName: file.filename ?? "file",
+          caption,
+        };
+    }
+    const res = await runtime.socket.sendMessage(chatId, content);
     return res?.key?.id ?? null;
   }
 

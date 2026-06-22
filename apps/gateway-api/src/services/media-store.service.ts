@@ -1,6 +1,17 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+export type MediaKind = "image" | "video" | "audio" | "document";
+
+/** Classify a mime type into the WhatsApp media kind used for sending/storing. */
+export function mediaKindFromMime(mimetype: string | null): MediaKind {
+  const m = (mimetype ?? "").toLowerCase();
+  if (m.startsWith("image/")) return "image";
+  if (m.startsWith("video/")) return "video";
+  if (m.startsWith("audio/")) return "audio";
+  return "document";
+}
+
 /** Maps a few common mime types to a sensible file extension. */
 const EXT_BY_MIME: Record<string, string> = {
   "image/jpeg": "jpg",

@@ -164,6 +164,36 @@ describe("normalizeInbound", () => {
     });
   });
 
+  it("unwraps an ephemeral/view-once container to find the media", () => {
+    const event = normalizeInbound(
+      "acc_001",
+      textMessage({
+        message: {
+          ephemeralMessage: {
+            message: {
+              imageMessage: { mimetype: "image/jpeg", caption: "secret" },
+            },
+          },
+        } as never,
+      }),
+      FIXED,
+    );
+    expect(event).toMatchObject({
+      event: EVENT_MESSAGE_RECEIVED,
+      payload: { message: { type: "image", text: "secret" } },
+    });
+  });
+
+  it("skips content-less text messages as unsupported", () => {
+    const event = normalizeInbound(
+      "acc_001",
+      textMessage({ message: { conversation: "" } }),
+      FIXED,
+    );
+    expect(event.event).toBe(EVENT_MESSAGE_UNSUPPORTED);
+    expect(event).toMatchObject({ payload: { reason: "empty_message" } });
+  });
+
   it("falls back to message.unsupported for genuinely unknown types", () => {
     const event = normalizeInbound(
       "acc_001",

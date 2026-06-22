@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import type {
@@ -120,6 +120,7 @@ export function ConversationsPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [text, setText] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const account = useQuery({
     queryKey: ["account-status", id],
@@ -150,16 +151,36 @@ export function ConversationsPage() {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages.data]);
 
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["messages", id, selected] });
+    void qc.invalidateQueries({ queryKey: ["chats", id] });
+  };
+
   const send = useMutation({
     mutationFn: () => api.sendChatMessage(id, selected!, text.trim()),
     onSuccess: () => {
       setText("");
-      void qc.invalidateQueries({ queryKey: ["messages", id, selected] });
-      void qc.invalidateQueries({ queryKey: ["chats", id] });
+      refresh();
     },
   });
 
+  const upload = useMutation({
+    mutationFn: (file: File) =>
+      api.sendChatMedia(id, selected!, file, text.trim() || undefined),
+    onSuccess: () => {
+      setText("");
+      refresh();
+    },
+  });
+
+  function onPickFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (file) upload.mutate(file);
+  }
+
   const connected = account.data?.state === "connected";
+  const busy = send.isPending || upload.isPending;
   const selectedChat = chats.data?.find((c) => c.chat_id === selected) ?? null;
 
   return (
@@ -258,25 +279,45 @@ export function ConversationsPage() {
                 }}
               >
                 <input
+                  ref={fileRef}
+                  type="file"
+                  className="hidden"
+                  onChange={onPickFile}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={!connected || busy}
+                  title="Attach a file"
+                  aria-label="Attach a file"
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-lg text-slate-500 hover:bg-slate-50 disabled:opacity-60"
+                >
+                  📎
+                </button>
+                <input
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   placeholder={
-                    connected ? "Type a message" : "Account not connected"
+                    connected
+                      ? upload.isPending
+                        ? "Uploading…"
+                        : "Type a message or caption"
+                      : "Account not connected"
                   }
-                  disabled={!connected || send.isPending}
+                  disabled={!connected || busy}
                   className="flex-1 rounded-lg border border-slate-300 px-3 py-2 disabled:bg-slate-50"
                 />
                 <button
                   type="submit"
-                  disabled={!connected || send.isPending || !text.trim()}
+                  disabled={!connected || busy || !text.trim()}
                   className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
                 >
                   Send
                 </button>
               </form>
-              {send.isError && (
+              {(send.isError || upload.isError) && (
                 <div className="px-3 pb-2 text-xs text-red-600">
-                  {String(send.error)}
+                  {String(send.error ?? upload.error)}
                 </div>
               )}
             </>

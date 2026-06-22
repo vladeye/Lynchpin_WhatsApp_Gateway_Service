@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
+import fastifyMultipart from "@fastify/multipart";
 import { healthRoutes } from "./routes/health";
 import { apiRoutes } from "./routes/api";
 import { accountsRoutes } from "./routes/accounts";
@@ -48,6 +49,11 @@ export async function buildApp(
   options: BuildAppOptions = {},
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: options.logger ?? false });
+
+  // Media uploads (send-media). 64 MB cap, one file per request.
+  await app.register(fastifyMultipart, {
+    limits: { fileSize: 64 * 1024 * 1024, files: 1 },
+  });
 
   await app.register(apiRoutes);
   await app.register(healthRoutes);

@@ -13,6 +13,7 @@ Documentation for the Lynchpin WhatsApp Gateway, organised like the sibling
 
 - [Gateway Accounts & Baileys Runtime](07-engineering/gateway-accounts-module.md)
 - [Admin Console](07-engineering/admin-console.md)
+- [Media (send & receive)](07-engineering/media.md)
 - [Security & Authentication](07-engineering/security-auth.md)
 - [Parameters & Runtime Settings](07-engineering/runtime-settings.md)
 - [CI Pipeline](07-engineering/ci-pipeline.md)

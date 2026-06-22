@@ -34,11 +34,24 @@ export interface BaileysSocket {
   requestPairingCode(phoneNumber: string): Promise<string>;
   sendMessage(
     jid: string,
-    content: { text: string },
+    content: OutgoingContent,
   ): Promise<{ key?: { id?: string | null } } | undefined>;
   logout(): Promise<void>;
   end(): void;
 }
+
+/** Outgoing message content the gateway sends through Baileys. */
+export type OutgoingContent =
+  | { text: string }
+  | { image: Buffer; caption?: string; mimetype?: string }
+  | { video: Buffer; caption?: string; mimetype?: string }
+  | { audio: Buffer; mimetype?: string; ptt?: boolean }
+  | {
+      document: Buffer;
+      mimetype?: string;
+      fileName?: string;
+      caption?: string;
+    };
 
 export interface SocketCreateArgs {
   accountId: string;
