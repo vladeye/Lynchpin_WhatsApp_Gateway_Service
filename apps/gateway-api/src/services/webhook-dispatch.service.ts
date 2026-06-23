@@ -3,6 +3,24 @@ import type { Logger } from "pino";
 import { hmacSign } from "../utils/crypto";
 import type { WebhookRepository } from "../stores/types";
 
+/** n8n versioned ingress paths. Status receipts split from everything else. */
+const PATH_STATUS = "/wa/v1/gateway/status";
+const PATH_INBOUND = "/wa/v1/gateway/inbound";
+
+/**
+ * Resolve the n8n path for an event type. Delivery/read/failed receipts go to
+ * the status ingress; message and lifecycle events (and the boot handshake) go
+ * to the inbound ingress, where n8n fans out by owner.
+ */
+export function pathForEvent(eventType: string): string {
+  return eventType === "message.status" ? PATH_STATUS : PATH_INBOUND;
+}
+
+/** Join an n8n base URL with an ingress path, tolerating a trailing slash. */
+function joinUrl(base: string, path: string): string {
+  return `${base.replace(/\/+$/, "")}${path}`;
+}
+
 export interface WebhookDispatchOptions {
   baseUrl?: string;
   /** Live override for the target URL (e.g. editable Parameters setting). */
@@ -71,7 +89,7 @@ export class WebhookDispatcher {
       if (this.secret) {
         headers["X-Webhook-Signature"] = hmacSign(body, this.secret);
       }
-      const res = await this.fetchImpl(baseUrl, {
+      const res = await this.fetchImpl(joinUrl(baseUrl, pathForEvent(eventType)), {
         method: "POST",
         headers,
         body,

@@ -69,6 +69,11 @@ export class SettingsService {
     return v == null ? true : v === "true";
   }
 
+  /** Corporate this gateway acts for, stamped onto outgoing events. */
+  companyKey(): string {
+    return this.config.COMPANY_KEY;
+  }
+
   apiKey(): string | undefined {
     return (
       this.cache.get(API_KEY_SETTING) ?? this.config.GATEWAY_API_KEY ?? undefined

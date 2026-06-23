@@ -15,6 +15,7 @@ Documentation for the Lynchpin WhatsApp Gateway, organised like the sibling
 - [Admin Console](07-engineering/admin-console.md)
 - [Security & Authentication](07-engineering/security-auth.md)
 - [Parameters & Runtime Settings](07-engineering/runtime-settings.md)
+- [n8n Integration (Gateway ⇄ n8n ⇄ Odoo)](07-engineering/n8n-integration.md)
 - [CI Pipeline](07-engineering/ci-pipeline.md)
 
 ### Decisions

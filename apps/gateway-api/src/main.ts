@@ -1,3 +1,4 @@
+import { EVENT_GATEWAY_HANDSHAKE } from "@lynchpin-whatsapp-gateway/shared-types";
 import { buildApp } from "./app";
 import { loadConfig } from "./config";
 import { createLogger } from "./utils/logger";
@@ -85,6 +86,20 @@ async function main(): Promise<void> {
     logger.error(err, "failed to start gateway-api");
     process.exit(1);
   }
+
+  // Boot handshake: prove the gateway -> n8n -> Odoo chain is reachable. Emit
+  // is non-throwing and records its own delivery row in the Logs feed, so a
+  // failure here never affects startup.
+  await webhook.emit(
+    EVENT_GATEWAY_HANDSHAKE,
+    null,
+    {
+      company_key: settings.companyKey(),
+      gateway_version: process.env.npm_package_version ?? "dev",
+    },
+    "boot handshake",
+  );
+  logger.info("boot handshake emitted");
 }
 
 void main();

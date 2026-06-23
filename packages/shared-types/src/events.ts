@@ -9,6 +9,8 @@ import { z } from "zod";
 
 export const EVENT_MESSAGE_RECEIVED = "message.received" as const;
 export const EVENT_MESSAGE_UNSUPPORTED = "message.unsupported" as const;
+/** Boot-time liveness probe of the gateway -> n8n -> Odoo chain. */
+export const EVENT_GATEWAY_HANDSHAKE = "gateway.handshake" as const;
 
 /** Conversation (chat) the event belongs to. */
 export const ConversationSchema = z.object({
@@ -93,3 +95,22 @@ export const GatewayEventSchema = z.discriminatedUnion("event", [
   MessageUnsupportedEventSchema,
 ]);
 export type GatewayEvent = z.infer<typeof GatewayEventSchema>;
+
+/**
+ * Handshake payload. Carries the corporate the gateway is acting for so Odoo
+ * can confirm the chain resolves a tenant. Account-less (fired before/independent
+ * of any WhatsApp account), so it sits outside the message envelope union.
+ */
+export const GatewayHandshakePayloadSchema = z.object({
+  company_key: z.string().min(1),
+  gateway_version: z.string(),
+});
+export type GatewayHandshakePayload = z.infer<typeof GatewayHandshakePayloadSchema>;
+
+export const GatewayHandshakeEventSchema = z.object({
+  event: z.literal(EVENT_GATEWAY_HANDSHAKE),
+  gateway_account_id: z.string().nullable(),
+  occurred_at: z.string().datetime(),
+  payload: GatewayHandshakePayloadSchema,
+});
+export type GatewayHandshakeEvent = z.infer<typeof GatewayHandshakeEventSchema>;
