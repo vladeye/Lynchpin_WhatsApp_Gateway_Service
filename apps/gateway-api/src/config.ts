@@ -23,6 +23,10 @@ const envSchema = z.object({
   MEDIA_ROOT: z.string().default("/app/sessions/media"),
   N8N_WEBHOOK_BASE_URL: z.string().optional(),
   MAX_TEXT_LENGTH: z.coerce.number().int().positive().default(4096),
+  // Corporate this gateway acts for. A corporate may own many WhatsApp
+  // accounts; each account belongs to exactly one corporate. Stamped onto
+  // every event so Odoo can resolve the tenant. Single-corporate for now.
+  COMPANY_KEY: z.string().default("default"),
 });
 
 export type Config = z.infer<typeof envSchema>;
