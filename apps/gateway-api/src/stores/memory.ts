@@ -127,9 +127,9 @@ export class InMemoryMessageRepository implements MessageRepository {
       direction: "outbound",
       type: row.type,
       body: row.body,
-      media_path: null,
-      media_mime: null,
-      media_filename: null,
+      media_path: row.media_path ?? null,
+      media_mime: row.media_mime ?? null,
+      media_filename: row.media_filename ?? null,
       created_at: new Date().toISOString(),
     });
     return { duplicate: false };

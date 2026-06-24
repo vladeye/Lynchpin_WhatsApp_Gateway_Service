@@ -85,6 +85,10 @@ export interface OutboundMessageRow {
   type: string;
   body: string | null;
   wa_message_id: string | null;
+  media_path?: string | null;
+  media_mime?: string | null;
+  media_filename?: string | null;
+  media_size?: number | null;
 }
 
 export interface MessageRepository {

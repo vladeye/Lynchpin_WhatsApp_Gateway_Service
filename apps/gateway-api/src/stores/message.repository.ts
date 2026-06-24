@@ -44,8 +44,9 @@ export class PgMessageRepository implements MessageRepository {
   async insertOutbound(row: OutboundMessageRow): Promise<{ duplicate: boolean }> {
     const res = await this.pool.query(
       `INSERT INTO gateway_messages
-         (id, gateway_account_id, wa_message_id, chat_id, direction, type, body, status, request_id)
-       VALUES ($1, $2, $3, $4, 'outbound', $5, $6, 'sent', $7)
+         (id, gateway_account_id, wa_message_id, chat_id, direction, type, body, status, request_id,
+          media_path, media_mime, media_filename, media_size)
+       VALUES ($1, $2, $3, $4, 'outbound', $5, $6, 'sent', $7, $8, $9, $10, $11)
        ON CONFLICT (request_id) WHERE request_id IS NOT NULL
        DO NOTHING`,
       [
@@ -56,6 +57,10 @@ export class PgMessageRepository implements MessageRepository {
         row.type,
         row.body,
         row.request_id,
+        row.media_path ?? null,
+        row.media_mime ?? null,
+        row.media_filename ?? null,
+        row.media_size ?? null,
       ],
     );
     return { duplicate: (res.rowCount ?? 0) === 0 };

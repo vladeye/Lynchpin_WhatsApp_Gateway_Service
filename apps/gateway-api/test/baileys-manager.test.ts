@@ -14,7 +14,7 @@ import type { BaileysSocket } from "../src/services/socket.types";
 class FakeSocket {
   private readonly listeners = new Map<string, ((arg: unknown) => void)[]>();
   user = { id: "573001112233:7@s.whatsapp.net", name: "Test User" };
-  sent: { jid: string; text: string }[] = [];
+  sent: { jid: string; content: Record<string, unknown> }[] = [];
 
   ev = {
     on: (event: string, listener: (arg: unknown) => void) => {
@@ -31,8 +31,8 @@ class FakeSocket {
   async requestPairingCode(): Promise<string> {
     return "ABCD-1234";
   }
-  async sendMessage(jid: string, content: { text: string }) {
-    this.sent.push({ jid, text: content.text });
+  async sendMessage(jid: string, content: Record<string, unknown>) {
+    this.sent.push({ jid, content });
     return { key: { id: "WAID-1" } };
   }
   async logout(): Promise<void> {}
@@ -273,6 +273,35 @@ describe("BaileysManager", () => {
     await manager.start("a1");
     const id = await manager.sendText("a1", "573001112233@s.whatsapp.net", "hi");
     expect(id).toBe("WAID-1");
-    expect(fake.sent[0]?.text).toBe("hi");
+    expect(fake.sent[0]?.content.text).toBe("hi");
+  });
+
+  it("sends an image as image content and a pdf as document content", async () => {
+    const { accountRepo, manager, fake } = setup();
+    await accountRepo.create({
+      id: "a1",
+      external_account_id: "x1",
+      name: "A1",
+      session_path: "/tmp/a1",
+    });
+    await manager.start("a1");
+
+    await manager.sendMedia("a1", "573001112233@s.whatsapp.net", {
+      buffer: Buffer.from("img"),
+      mimetype: "image/png",
+      filename: "p.png",
+      caption: "hi",
+    });
+    expect(fake.sent[0]?.content.image).toBeInstanceOf(Buffer);
+    expect(fake.sent[0]?.content.caption).toBe("hi");
+
+    await manager.sendMedia("a1", "573001112233@s.whatsapp.net", {
+      buffer: Buffer.from("%PDF"),
+      mimetype: "application/pdf",
+      filename: "doc.pdf",
+      caption: null,
+    });
+    expect(fake.sent[1]?.content.document).toBeInstanceOf(Buffer);
+    expect(fake.sent[1]?.content.fileName).toBe("doc.pdf");
   });
 });

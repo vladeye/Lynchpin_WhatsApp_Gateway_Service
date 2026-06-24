@@ -69,6 +69,19 @@ async function send<T>(path: string, method: string, body?: unknown): Promise<T>
   return json;
 }
 
+async function sendForm<T>(path: string, form: FormData): Promise<T> {
+  // No content-type header: the browser sets the multipart boundary.
+  const res = await fetch(path, { method: "POST", body: form });
+  if (res.status === 401) onUnauthorized(path);
+  const json = (await res.json().catch(() => ({}))) as T & {
+    error?: { message?: string };
+  };
+  if (!res.ok) {
+    throw new Error(json.error?.message ?? `${path} -> ${res.status}`);
+  }
+  return json;
+}
+
 function eventsQueryString(q: EventsQuery): string {
   const p = new URLSearchParams();
   if (q.limit != null) p.set("limit", String(q.limit));
@@ -125,6 +138,16 @@ export const api = {
       type: "text",
       text,
     }),
+  /** Upload and send a file (image/video/audio/document) with optional caption. */
+  sendChatMedia: (id: string, chatId: string, file: File, caption?: string) => {
+    const form = new FormData();
+    form.append("request_id", crypto.randomUUID());
+    form.append("gateway_account_id", id);
+    form.append("chat_id", chatId);
+    if (caption) form.append("caption", caption);
+    form.append("file", file);
+    return sendForm("/api/messages/send-media", form);
+  },
 
   listEvents: (q: EventsQuery = {}) =>
     getJson<EventsPage>(`/api/events${eventsQueryString(q)}`),

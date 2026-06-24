@@ -13,7 +13,7 @@ import type {
 } from "../stores/types";
 import { clearSession, sessionDir } from "../stores/auth-store/file-auth-store";
 import type { BaileysManager } from "./baileys-manager.service";
-import type { MediaStore } from "./media-store.service";
+import { mediaKindFromMime, type MediaStore } from "./media-store.service";
 import type { SettingsService } from "./settings.service";
 
 /** A media attachment resolved to an absolute path ready to stream. */
@@ -192,6 +192,73 @@ export class AccountService {
       input.gateway_account_id,
       input.chat_id,
       input.text,
+    );
+    if (waId) {
+      await this.messageRepo.setOutboundWaId(input.request_id, waId);
+    }
+    return { wa_message_id: waId, status: "sent", duplicate: false };
+  }
+
+  /** Send a media attachment and persist it so the thread can display it. */
+  async sendMediaMessage(input: {
+    request_id: string;
+    gateway_account_id: string;
+    chat_id: string;
+    buffer: Buffer;
+    mimetype: string | null;
+    filename: string | null;
+    caption: string | null;
+  }): Promise<{ wa_message_id: string | null; status: string; duplicate: boolean }> {
+    const rec = await this.accountRepo.getById(input.gateway_account_id);
+    if (!rec) throw new AccountNotFoundError(input.gateway_account_id);
+    if (rec.state !== "connected") {
+      throw new AccountNotConnectedError(input.gateway_account_id);
+    }
+
+    const existing = await this.messageRepo.getByRequestId(input.request_id);
+    if (existing) {
+      return {
+        wa_message_id: existing.wa_message_id ?? null,
+        status: "sent",
+        duplicate: true,
+      };
+    }
+
+    const id = randomUUID();
+    const saved = await this.mediaStore.save(
+      input.gateway_account_id,
+      id,
+      input.buffer,
+      input.mimetype,
+      input.filename,
+    );
+
+    const { duplicate } = await this.messageRepo.insertOutbound({
+      id,
+      gateway_account_id: input.gateway_account_id,
+      request_id: input.request_id,
+      chat_id: input.chat_id,
+      type: mediaKindFromMime(input.mimetype),
+      body: input.caption,
+      wa_message_id: null,
+      media_path: saved.relativePath,
+      media_mime: input.mimetype,
+      media_filename: input.filename,
+      media_size: saved.size,
+    });
+    if (duplicate) {
+      return { wa_message_id: null, status: "sent", duplicate: true };
+    }
+
+    const waId = await this.manager.sendMedia(
+      input.gateway_account_id,
+      input.chat_id,
+      {
+        buffer: input.buffer,
+        mimetype: input.mimetype,
+        filename: input.filename,
+        caption: input.caption,
+      },
     );
     if (waId) {
       await this.messageRepo.setOutboundWaId(input.request_id, waId);
