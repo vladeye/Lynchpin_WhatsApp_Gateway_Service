@@ -75,6 +75,7 @@ function setup() {
     webhook,
     sessionRoot: path.join(tmpdir(), "lp-test-sessions"),
     mediaStore,
+    companyKey: () => "test-corp",
   });
   return { accountRepo, messageRepo, webhookRepo, fake, manager, mediaStore };
 }
@@ -150,6 +151,13 @@ describe("BaileysManager", () => {
     expect(msgs[0]?.direction).toBe("inbound");
     const events = await webhookRepo.listRecent(10);
     expect(events.filter((e) => e.event_type === "message.received")).toHaveLength(1);
+    // The emitted message.received payload is stamped with tenant + owner.
+    const emitted = webhookRepo.records.find(
+      (r) => r.event_type === "message.received",
+    );
+    const payload = emitted?.payload as { company_key?: string; owner?: string };
+    expect(payload?.company_key).toBe("test-corp");
+    expect(payload?.owner).toBe("odoo");
   });
 
   it("stores an inbound image, downloads its media, and emits a webhook", async () => {

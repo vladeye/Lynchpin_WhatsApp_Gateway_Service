@@ -59,6 +59,10 @@ export type InboundMessage = z.infer<typeof InboundMessageSchema>;
 export const MessageReceivedPayloadSchema = z.object({
   conversation: ConversationSchema,
   message: InboundMessageSchema,
+  // Stamped by the gateway at emit time (not by the normalizer): the corporate
+  // this account acts for, and the current conversation owner ("odoo" until M5).
+  company_key: z.string().nullable().optional(),
+  owner: z.string().optional(),
 });
 export type MessageReceivedPayload = z.infer<typeof MessageReceivedPayloadSchema>;
 
