@@ -38,6 +38,8 @@ export interface BaileysManagerDeps {
   mediaStore?: MediaStore;
   /** Live provider for the "sync full history" setting (per new connection). */
   syncFullHistory?: () => boolean;
+  /** Corporate this gateway acts for, stamped onto every emitted event. */
+  companyKey?: () => string;
   logger?: Logger;
 }
 
@@ -334,7 +336,13 @@ export class BaileysManager {
       await this.deps.webhook.emit(
         "message.received",
         accountId,
-        received.payload,
+        {
+          ...received.payload,
+          // Tenant attribution + ownership for Odoo. owner is "odoo" until the
+          // routing/handover cache lands (M5); the gateway never decides it.
+          company_key: this.deps.companyKey?.() ?? null,
+          owner: "odoo",
+        },
         received.payload.message.text ?? `(${received.payload.message.type})`,
       );
     }

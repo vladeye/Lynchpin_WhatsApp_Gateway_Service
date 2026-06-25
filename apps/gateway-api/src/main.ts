@@ -58,6 +58,7 @@ async function main(): Promise<void> {
     sessionRoot: config.SESSION_ROOT,
     mediaStore,
     syncFullHistory: () => settings.syncFullHistory(),
+    companyKey: () => settings.companyKey(),
     logger,
   });
 

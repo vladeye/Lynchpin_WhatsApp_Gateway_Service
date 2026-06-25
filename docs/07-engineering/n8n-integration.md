@@ -2,9 +2,10 @@
 
 ## Status
 
-In progress — Slice 0 (handshake) active. `apps/gateway-api`
-(`webhook-dispatch.service`, boot handshake in `main.ts`) + the Odoo module
-`appointment_communications_wa` + the n8n workflow "WA - gateway - Odoo".
+In progress — **M1 (inbound events) active** on top of Slice 0 (handshake).
+`apps/gateway-api` (`webhook-dispatch.service`, boot handshake, `message.received`
+stamped with `company_key`+`owner`) + the Odoo module `appointment_communications_wa`
+(inbound storage) + the n8n workflow "WA - gateway - Odoo" (HMAC + routing).
 
 ## Architecture
 
@@ -51,10 +52,29 @@ ingress. n8n ("WA - gateway - Odoo") forwards it to Odoo's
 `/communications/wa/handshake`, which authenticates the bearer and echoes the
 identity back. The round-trip is recorded as a delivery row in the **Logs** feed.
 
+## Inbound messages (M1)
+
+Live inbound messages emit `message.received` to the inbound ingress with the
+payload stamped `company_key` (from `COMPANY_KEY`) + `owner` (`"odoo"` until the
+routing cache, M5). The n8n workflow now:
+
+1. **Validates the HMAC** — a Crypto node recomputes `sha256=<hex>` over the body
+   keyed by `GATEWAY_WEBHOOK_SECRET` (= the gateway's `WEBHOOK_SECRET`, shared into
+   the n8n env) and compares it to `X-Webhook-Signature`. Mismatch → **401**,
+   nothing forwarded.
+2. **Routes by event** — `gateway.handshake` → `/communications/wa/handshake`,
+   everything else → `/communications/wa/inbound`.
+
+Odoo `/communications/wa/inbound` resolves the company by `company_key`
+(auto-provisioning a `wa.account` if unseen), upserts the conversation by
+`(account, chat_id)`, and stores the message **deduped** on
+`(conversation, external_message_id)` — idempotent, so at-least-once delivery is
+safe. Fire-and-forget: Odoo never blocks the gateway.
+
 ## Security
 
 - **Gateway → n8n:** HMAC `X-Webhook-Signature` over the body, keyed by
-  `WEBHOOK_SECRET`.
+  `WEBHOOK_SECRET`; **enforced in n8n** as of M1 (`GATEWAY_WEBHOOK_SECRET`).
 - **n8n → Odoo:** `Authorization: Bearer` keyed by `ODOO_WHATSAPP_WEBHOOK_SECRET`
   (system param `communications_wa.webhook_secret`, env fallback).
 - **n8n → Gateway:** `GATEWAY_API_TOKEN` (lands with M2).
