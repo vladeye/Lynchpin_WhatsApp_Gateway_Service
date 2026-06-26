@@ -7,8 +7,10 @@ import { runMigrations } from "./db/migrate";
 import { PgAccountRepository } from "./stores/account.repository";
 import { PgMessageRepository } from "./stores/message.repository";
 import { PgWebhookRepository } from "./stores/webhook.repository";
+import { PgRouteRepository } from "./stores/route.repository";
 import { PgAdminRepository } from "./stores/admin.repository";
 import { PgSettingsRepository } from "./stores/settings.repository";
+import { RouteService } from "./services/route.service";
 import { WebhookDispatcher } from "./services/webhook-dispatch.service";
 import { OutboxDispatcher } from "./services/outbox-dispatcher.service";
 import { BaileysManager } from "./services/baileys-manager.service";
@@ -30,8 +32,11 @@ async function main(): Promise<void> {
   const accountRepo = new PgAccountRepository(pool);
   const messageRepo = new PgMessageRepository(pool);
   const webhookRepo = new PgWebhookRepository(pool);
+  const routeRepo = new PgRouteRepository(pool);
   const adminRepo = new PgAdminRepository(pool);
   const settingsRepo = new PgSettingsRepository(pool);
+
+  const routeService = new RouteService(routeRepo);
 
   const settings = new SettingsService(settingsRepo, config, logger);
   await settings.load();
@@ -66,6 +71,7 @@ async function main(): Promise<void> {
     mediaStore,
     syncFullHistory: () => settings.syncFullHistory(),
     companyKey: () => settings.companyKey(),
+    routeFor: (accountId, chatId) => routeService.routeFor(accountId, chatId),
     logger,
   });
 
@@ -87,6 +93,7 @@ async function main(): Promise<void> {
     deps: {
       accountService,
       authService,
+      routeService,
       settings,
       webhookRepo,
       config,

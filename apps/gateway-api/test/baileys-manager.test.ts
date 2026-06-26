@@ -4,9 +4,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { BaileysManager } from "../src/services/baileys-manager.service";
 import { MediaStore } from "../src/services/media-store.service";
 import { WebhookDispatcher } from "../src/services/webhook-dispatch.service";
+import { RouteService } from "../src/services/route.service";
 import {
   InMemoryAccountRepository,
   InMemoryMessageRepository,
+  InMemoryRouteRepository,
   InMemoryWebhookRepository,
 } from "../src/stores/memory";
 import type { BaileysSocket } from "../src/services/socket.types";
@@ -59,6 +61,7 @@ function setup() {
   const messageRepo = new InMemoryMessageRepository();
   const webhookRepo = new InMemoryWebhookRepository();
   const webhook = new WebhookDispatcher(webhookRepo); // no baseUrl -> records only
+  const routeService = new RouteService(new InMemoryRouteRepository());
   const fake = new FakeSocket();
   const mediaStore = new MediaStore(
     path.join(tmpdir(), `lp-test-media-${Math.random().toString(36).slice(2)}`),
@@ -76,8 +79,9 @@ function setup() {
     sessionRoot: path.join(tmpdir(), "lp-test-sessions"),
     mediaStore,
     companyKey: () => "test-corp",
+    routeFor: (a, c) => routeService.routeFor(a, c),
   });
-  return { accountRepo, messageRepo, webhookRepo, fake, manager, mediaStore };
+  return { accountRepo, messageRepo, webhookRepo, routeService, fake, manager, mediaStore };
 }
 
 describe("BaileysManager", () => {
@@ -155,9 +159,50 @@ describe("BaileysManager", () => {
     const emitted = webhookRepo.records.find(
       (r) => r.event_type === "message.received",
     );
-    const payload = emitted?.payload as { company_key?: string; owner?: string };
+    const payload = emitted?.payload as {
+      company_key?: string;
+      owner?: string;
+      route_status?: string;
+    };
     expect(payload?.company_key).toBe("test-corp");
     expect(payload?.owner).toBe("odoo");
+    expect(payload?.route_status).toBe("active");
+  });
+
+  it("stamps the cached route owner + status on inbound", async () => {
+    const { accountRepo, webhookRepo, routeService, manager, fake } = setup();
+    await accountRepo.create({
+      id: "a1",
+      external_account_id: "x1",
+      name: "A1",
+      session_path: "/tmp/a1",
+    });
+    // Odoo handed this chat to RUSH (cached via a route command).
+    await routeService.executeCommand({
+      gateway_account_id: "a1",
+      chat_id: "573001112233@s.whatsapp.net",
+      command: "change_route",
+      owner: "rush",
+    });
+    await manager.start("a1");
+    fake.emit("messages.upsert", {
+      type: "notify",
+      messages: [
+        {
+          key: { remoteJid: "573001112233@s.whatsapp.net", id: "RT1", fromMe: false },
+          message: { conversation: "hola" },
+          pushName: "Maria",
+          messageTimestamp: 1700000000,
+        },
+      ],
+    });
+    await tick();
+    const emitted = webhookRepo.records.find(
+      (r) => r.event_type === "message.received",
+    );
+    const payload = emitted?.payload as { owner?: string; route_status?: string };
+    expect(payload?.owner).toBe("rush");
+    expect(payload?.route_status).toBe("active");
   });
 
   it("stores an inbound image, downloads its media, and emits a webhook", async () => {

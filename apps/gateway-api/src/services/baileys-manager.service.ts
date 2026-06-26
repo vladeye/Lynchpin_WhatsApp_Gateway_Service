@@ -45,6 +45,15 @@ export interface BaileysManagerDeps {
   syncFullHistory?: () => boolean;
   /** Corporate this gateway acts for, stamped onto every emitted event. */
   companyKey?: () => string;
+  /**
+   * Cached conversation owner + route status (a cache of Odoo's routing
+   * decisions). Looked up per inbound to stamp the event; defaults to
+   * odoo/active when absent. The gateway never decides ownership.
+   */
+  routeFor?: (
+    accountId: string,
+    chatId: string,
+  ) => Promise<{ owner: string; status: string }>;
   logger?: Logger;
 }
 
@@ -366,15 +375,22 @@ export class BaileysManager {
     });
     if (!stored || fromMe) return; // duplicate, or our own message
     if (options.emitWebhook) {
+      // Stamp the cached owner + route status (a cache of Odoo's decisions);
+      // defaults to odoo/active. The gateway always emits — owner/route_status
+      // are labels n8n/Odoo act on; the gateway never decides ownership.
+      const chatId = received.payload.conversation.chat_id;
+      const route = (await this.deps.routeFor?.(accountId, chatId)) ?? {
+        owner: "odoo",
+        status: "active",
+      };
       await this.deps.webhook.emit(
         "message.received",
         accountId,
         {
           ...received.payload,
-          // Tenant attribution + ownership for Odoo. owner is "odoo" until the
-          // routing/handover cache lands (M5); the gateway never decides it.
           company_key: this.deps.companyKey?.() ?? null,
-          owner: "odoo",
+          owner: route.owner,
+          route_status: route.status,
         },
         received.payload.message.text ?? `(${received.payload.message.type})`,
       );
