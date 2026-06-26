@@ -130,6 +130,8 @@ export const api = {
     getJson<EventsPage>(`/api/events${eventsQueryString(q)}`),
   getEvent: (id: string) =>
     getJson<{ event: EventLogDetail }>(`/api/events/${id}`).then((r) => r.event),
+  redeliverEvent: (id: string) =>
+    send<{ success: boolean }>(`/api/events/${id}/redeliver`, "POST"),
 
   parameters: () => getJson<ParametersResponse>("/api/parameters"),
   updateParameter: (key: string, value: string | number | boolean) =>

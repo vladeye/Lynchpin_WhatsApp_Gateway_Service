@@ -23,6 +23,8 @@ export interface AppDeps {
   settings: SettingsService;
   webhookRepo: WebhookRepository;
   config: Config;
+  /** Kick the outbox worker (used by the redeliver endpoint). */
+  outboxKick?: () => void;
 }
 
 export interface BuildAppOptions {
@@ -53,7 +55,7 @@ export async function buildApp(
   await app.register(healthRoutes);
 
   if (options.deps) {
-    const { accountService, authService, settings, webhookRepo, config } =
+    const { accountService, authService, settings, webhookRepo, config, outboxKick } =
       options.deps;
     registerAuthGuard(app, authService, settings);
     await app.register(
@@ -63,7 +65,7 @@ export async function buildApp(
     );
     await app.register(accountsRoutes(accountService));
     await app.register(messagesRoutes(accountService));
-    await app.register(eventsRoutes(webhookRepo));
+    await app.register(eventsRoutes(webhookRepo, outboxKick));
     await app.register(parametersRoutes(settings));
   }
 

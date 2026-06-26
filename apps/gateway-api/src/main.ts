@@ -10,6 +10,7 @@ import { PgWebhookRepository } from "./stores/webhook.repository";
 import { PgAdminRepository } from "./stores/admin.repository";
 import { PgSettingsRepository } from "./stores/settings.repository";
 import { WebhookDispatcher } from "./services/webhook-dispatch.service";
+import { OutboxDispatcher } from "./services/outbox-dispatcher.service";
 import { BaileysManager } from "./services/baileys-manager.service";
 import { MediaStore } from "./services/media-store.service";
 import { AccountService } from "./services/account.service";
@@ -42,10 +43,16 @@ async function main(): Promise<void> {
   });
   await authService.seedAdmin(config.ADMIN_USERNAME, config.ADMIN_PASSWORD);
 
-  const webhook = new WebhookDispatcher(webhookRepo, {
+  const outbox = new OutboxDispatcher(webhookRepo, {
     baseUrlProvider: () => settings.n8nBaseUrl(),
     secret: config.WEBHOOK_SECRET,
+    pollMs: config.OUTBOX_POLL_MS,
+    batchSize: config.OUTBOX_BATCH,
+    maxAttempts: config.OUTBOX_MAX_ATTEMPTS,
     logger,
+  });
+  const webhook = new WebhookDispatcher(webhookRepo, {
+    notify: () => outbox.kick(),
   });
 
   const mediaStore = new MediaStore(config.MEDIA_ROOT);
@@ -77,7 +84,14 @@ async function main(): Promise<void> {
 
   const app = await buildApp({
     logger: true,
-    deps: { accountService, authService, settings, webhookRepo, config },
+    deps: {
+      accountService,
+      authService,
+      settings,
+      webhookRepo,
+      config,
+      outboxKick: () => outbox.kick(),
+    },
   });
 
   try {
@@ -86,6 +100,17 @@ async function main(): Promise<void> {
   } catch (err) {
     logger.error(err, "failed to start gateway-api");
     process.exit(1);
+  }
+
+  // Start draining the webhook outbox now that the DB and HTTP server are up.
+  outbox.start();
+
+  for (const signal of ["SIGTERM", "SIGINT"] as const) {
+    process.once(signal, () => {
+      logger.info({ signal }, "shutting down");
+      outbox.stop();
+      void app.close().then(() => process.exit(0));
+    });
   }
 
   // Boot handshake: prove the gateway -> n8n -> Odoo chain is reachable. Emit

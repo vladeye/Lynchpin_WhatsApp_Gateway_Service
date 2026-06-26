@@ -17,6 +17,7 @@ import type {
   MessageRepository,
   OutboundMessageRow,
   SettingRow,
+  DueDelivery,
   SettingsRepository,
   WebhookRecord,
   WebhookRepository,
@@ -210,20 +211,95 @@ interface StoredWebhook extends WebhookRecord {
   last_error: string | null;
   delivered_at: string | null;
   created_at: string;
+  next_attempt_at: string;
 }
 
 export class InMemoryWebhookRepository implements WebhookRepository {
   readonly records: StoredWebhook[] = [];
 
   async record(input: WebhookRecord): Promise<void> {
+    const now = new Date().toISOString();
     this.records.push({
       ...input,
       status: "pending",
       attempts: 0,
       last_error: null,
       delivered_at: null,
-      created_at: new Date().toISOString(),
+      created_at: now,
+      next_attempt_at: now,
     });
+  }
+
+  async claimDue(limit: number): Promise<DueDelivery[]> {
+    const now = Date.now();
+    return this.records
+      .filter(
+        (r) => r.status === "pending" && Date.parse(r.next_attempt_at) <= now,
+      )
+      .sort((a, b) => a.next_attempt_at.localeCompare(b.next_attempt_at))
+      .slice(0, limit)
+      .map((r) => ({
+        id: r.id,
+        event_type: r.event_type,
+        gateway_account_id: r.gateway_account_id,
+        payload: r.payload,
+        attempts: r.attempts,
+        created_at: r.created_at,
+      }));
+  }
+
+  async markDelivered(id: string, attempts: number): Promise<void> {
+    const rec = this.records.find((r) => r.id === id);
+    if (rec) {
+      rec.status = "delivered";
+      rec.attempts = attempts;
+      rec.last_error = null;
+      rec.delivered_at = new Date().toISOString();
+    }
+  }
+
+  async reschedule(
+    id: string,
+    attempts: number,
+    nextAttemptAt: Date,
+    lastError: string | null,
+  ): Promise<void> {
+    const rec = this.records.find((r) => r.id === id);
+    if (rec) {
+      rec.status = "pending";
+      rec.attempts = attempts;
+      rec.last_error = lastError;
+      rec.next_attempt_at = nextAttemptAt.toISOString();
+    }
+  }
+
+  async markDead(
+    id: string,
+    attempts: number,
+    lastError: string | null,
+  ): Promise<void> {
+    const rec = this.records.find((r) => r.id === id);
+    if (rec) {
+      rec.status = "dead";
+      rec.attempts = attempts;
+      rec.last_error = lastError;
+    }
+  }
+
+  async markSkipped(id: string): Promise<void> {
+    const rec = this.records.find((r) => r.id === id);
+    if (rec) rec.status = "skipped";
+  }
+
+  async redeliver(id: string): Promise<boolean> {
+    const rec = this.records.find((r) => r.id === id);
+    if (!rec) return false;
+    rec.status = "pending";
+    rec.attempts = 0;
+    rec.last_error = null;
+    rec.delivered_at = null;
+    rec.next_attempt_at = new Date().toISOString();
+    return true;
   }
 
   async updateStatus(

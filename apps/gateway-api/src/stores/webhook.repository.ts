@@ -4,10 +4,13 @@ import type {
   EventLogItem,
 } from "@lynchpin-whatsapp-gateway/shared-types";
 import type {
+  DueDelivery,
   EventListFilter,
   WebhookRecord,
   WebhookRepository,
 } from "./types";
+
+const ISO = `'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'`;
 
 /** Builds the shared WHERE clause + params for filtered event queries. */
 function buildWhere(filter: EventListFilter): {
@@ -62,6 +65,79 @@ export class PgWebhookRepository implements WebhookRepository {
        WHERE id = $1`,
       [id, status, attempts, lastError, delivered],
     );
+  }
+
+  async claimDue(limit: number): Promise<DueDelivery[]> {
+    // Single in-process worker with non-overlapping ticks, so a plain due-query
+    // is safe. SKIP LOCKED guards the unlikely overlap; a leased claim would be
+    // needed only for multiple gateway instances (future).
+    const { rows } = await this.pool.query<DueDelivery>(
+      `SELECT id, event_type, gateway_account_id, payload, attempts,
+              to_char(created_at, ${ISO}) AS created_at
+         FROM gateway_webhook_deliveries
+        WHERE status = 'pending' AND next_attempt_at <= now()
+        ORDER BY next_attempt_at ASC
+        LIMIT $1
+        FOR UPDATE SKIP LOCKED`,
+      [limit],
+    );
+    return rows;
+  }
+
+  async markDelivered(id: string, attempts: number): Promise<void> {
+    await this.pool.query(
+      `UPDATE gateway_webhook_deliveries
+          SET status = 'delivered', attempts = $2, last_error = NULL,
+              delivered_at = now()
+        WHERE id = $1`,
+      [id, attempts],
+    );
+  }
+
+  async reschedule(
+    id: string,
+    attempts: number,
+    nextAttemptAt: Date,
+    lastError: string | null,
+  ): Promise<void> {
+    await this.pool.query(
+      `UPDATE gateway_webhook_deliveries
+          SET status = 'pending', attempts = $2, last_error = $3,
+              next_attempt_at = $4
+        WHERE id = $1`,
+      [id, attempts, lastError, nextAttemptAt],
+    );
+  }
+
+  async markDead(
+    id: string,
+    attempts: number,
+    lastError: string | null,
+  ): Promise<void> {
+    await this.pool.query(
+      `UPDATE gateway_webhook_deliveries
+          SET status = 'dead', attempts = $2, last_error = $3
+        WHERE id = $1`,
+      [id, attempts, lastError],
+    );
+  }
+
+  async markSkipped(id: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE gateway_webhook_deliveries SET status = 'skipped' WHERE id = $1`,
+      [id],
+    );
+  }
+
+  async redeliver(id: string): Promise<boolean> {
+    const { rowCount } = await this.pool.query(
+      `UPDATE gateway_webhook_deliveries
+          SET status = 'pending', attempts = 0, last_error = NULL,
+              delivered_at = NULL, next_attempt_at = now()
+        WHERE id = $1`,
+      [id],
+    );
+    return (rowCount ?? 0) > 0;
   }
 
   async listRecent(limit: number): Promise<EventLogItem[]> {

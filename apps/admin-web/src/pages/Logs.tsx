@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 
-const STATUSES = ["", "pending", "delivered", "failed", "skipped"];
+const STATUSES = ["", "pending", "delivered", "dead", "skipped", "failed"];
 const PAGE = 25;
 
 export function LogsPage() {
@@ -27,6 +27,15 @@ export function LogsPage() {
     queryKey: ["event", selected],
     queryFn: () => api.getEvent(selected!),
     enabled: Boolean(selected),
+  });
+
+  const queryClient = useQueryClient();
+  const redeliver = useMutation({
+    mutationFn: (id: string) => api.redeliverEvent(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["event", selected] });
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+    },
   });
 
   const total = events.data?.total ?? 0;
@@ -149,12 +158,21 @@ export function LogsPage() {
           >
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-semibold text-slate-900">Event detail</h2>
-              <button
-                onClick={() => setSelected(null)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => selected && redeliver.mutate(selected)}
+                  disabled={redeliver.isPending}
+                  className="rounded-lg bg-emerald-600 px-3 py-1 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {redeliver.isPending ? "Redelivering…" : "Redeliver"}
+                </button>
+                <button
+                  onClick={() => setSelected(null)}
+                  className="text-slate-400 hover:text-slate-600"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             {detail.isLoading && <div className="text-slate-400">Loading…</div>}
             {detail.data && (
