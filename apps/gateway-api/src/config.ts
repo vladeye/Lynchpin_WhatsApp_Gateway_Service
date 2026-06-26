@@ -27,6 +27,11 @@ const envSchema = z.object({
   // accounts; each account belongs to exactly one corporate. Stamped onto
   // every event so Odoo can resolve the tenant. Single-corporate for now.
   COMPANY_KEY: z.string().default("default"),
+  // Outbox dispatcher: how often to drain, batch size, and how many attempts
+  // before a delivery is marked dead.
+  OUTBOX_POLL_MS: z.coerce.number().int().positive().default(2000),
+  OUTBOX_BATCH: z.coerce.number().int().positive().default(20),
+  OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().positive().default(8),
 });
 
 export type Config = z.infer<typeof envSchema>;

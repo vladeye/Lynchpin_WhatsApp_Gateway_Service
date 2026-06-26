@@ -13,7 +13,7 @@ function clamp(n: number, lo: number, hi: number): number {
 }
 
 /** Logs feed: filtered, paginated gateway events from the delivery log. */
-export function eventsRoutes(repo: WebhookRepository) {
+export function eventsRoutes(repo: WebhookRepository, kick?: () => void) {
   return async function register(app: FastifyInstance): Promise<void> {
     app.get<{ Querystring: EventsQuery }>("/api/events", async (req) => {
       const limit = clamp(Number(req.query.limit) || 50, 1, 200);
@@ -49,5 +49,22 @@ export function eventsRoutes(repo: WebhookRepository) {
       }
       return { success: true, event: detail };
     });
+
+    // Replay: re-queue a delivery (pending, attempts reset) and nudge the worker.
+    // Consumers dedup, so re-delivering a delivered event is safe.
+    app.post<{ Params: { id: string } }>(
+      "/api/events/:id/redeliver",
+      async (req, reply) => {
+        const ok = await repo.redeliver(req.params.id);
+        if (!ok) {
+          return reply.code(404).send({
+            success: false,
+            error: { code: "NOT_FOUND", message: "Event not found" },
+          });
+        }
+        kick?.();
+        return { success: true };
+      },
+    );
   };
 }

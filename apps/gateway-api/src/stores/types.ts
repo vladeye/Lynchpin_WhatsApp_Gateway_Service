@@ -120,6 +120,17 @@ export interface EventListFilter {
   status?: string;
 }
 
+/** A delivery the outbox worker has claimed for (re)dispatch. */
+export interface DueDelivery {
+  id: string;
+  event_type: string;
+  gateway_account_id: string | null;
+  payload: unknown;
+  attempts: number;
+  /** ISO timestamp; reused as the stable `occurred_at` on every retry. */
+  created_at: string;
+}
+
 export interface WebhookRepository {
   record(input: WebhookRecord): Promise<void>;
   updateStatus(
@@ -129,6 +140,19 @@ export interface WebhookRepository {
     lastError: string | null,
     delivered: boolean,
   ): Promise<void>;
+  /** Claim pending deliveries whose next_attempt_at is due. */
+  claimDue(limit: number): Promise<DueDelivery[]>;
+  markDelivered(id: string, attempts: number): Promise<void>;
+  reschedule(
+    id: string,
+    attempts: number,
+    nextAttemptAt: Date,
+    lastError: string | null,
+  ): Promise<void>;
+  markDead(id: string, attempts: number, lastError: string | null): Promise<void>;
+  markSkipped(id: string): Promise<void>;
+  /** Reset a delivery for replay. Returns true when a row was reset. */
+  redeliver(id: string): Promise<boolean>;
   listRecent(limit: number): Promise<EventLogItem[]>;
   /** Filtered, paginated list for the Logs screen. */
   list(filter: EventListFilter): Promise<EventLogItem[]>;
