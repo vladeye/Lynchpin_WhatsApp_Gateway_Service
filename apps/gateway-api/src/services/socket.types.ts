@@ -16,6 +16,25 @@ export interface HistorySet {
   messages: BaileysMessage[];
 }
 
+/** Minimal message key shared by upsert/update/receipt events. */
+export interface MessageKey {
+  id?: string | null;
+  remoteJid?: string | null;
+  fromMe?: boolean | null;
+}
+
+/** `messages.update`: carries the numeric delivery `status` for a message. */
+export interface MessageStatusUpdate {
+  key?: MessageKey;
+  update?: { status?: number | null };
+}
+
+/** `message-receipt.update`: per-recipient delivery/read receipt timestamps. */
+export interface MessageReceiptUpdate {
+  key?: MessageKey;
+  receipt?: { receiptTimestamp?: number | null; readTimestamp?: number | null };
+}
+
 export interface BaileysSocket {
   ev: {
     on(event: "connection.update", listener: (u: ConnectionUpdate) => void): void;
@@ -24,6 +43,14 @@ export interface BaileysSocket {
     on(
       event: "messaging-history.set",
       listener: (h: HistorySet) => void,
+    ): void;
+    on(
+      event: "messages.update",
+      listener: (u: MessageStatusUpdate[]) => void,
+    ): void;
+    on(
+      event: "message-receipt.update",
+      listener: (u: MessageReceiptUpdate[]) => void,
     ): void;
   };
   user?: {

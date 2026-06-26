@@ -9,6 +9,8 @@ import { z } from "zod";
 
 export const EVENT_MESSAGE_RECEIVED = "message.received" as const;
 export const EVENT_MESSAGE_UNSUPPORTED = "message.unsupported" as const;
+/** Delivery/read/failed receipt for one of our outbound messages. */
+export const EVENT_MESSAGE_STATUS = "message.status" as const;
 /** Boot-time liveness probe of the gateway -> n8n -> Odoo chain. */
 export const EVENT_GATEWAY_HANDSHAKE = "gateway.handshake" as const;
 
@@ -72,6 +74,29 @@ export const MessageUnsupportedPayloadSchema = z.object({
 });
 export type MessageUnsupportedPayload = z.infer<typeof MessageUnsupportedPayloadSchema>;
 
+/** Delivery lifecycle of an outbound message, as confirmed by WhatsApp. */
+export const MessageDeliveryStatusSchema = z.enum([
+  "sent",
+  "delivered",
+  "read",
+  "failed",
+]);
+export type MessageDeliveryStatus = z.infer<typeof MessageDeliveryStatusSchema>;
+
+/**
+ * Receipt for one of our outbound messages. Matched in Odoo by `wa_message_id`
+ * (the WhatsApp id the send returned). Consumers must treat it monotonically —
+ * out-of-order receipts must never regress a more-advanced state.
+ */
+export const MessageStatusPayloadSchema = z.object({
+  company_key: z.string().nullable().optional(),
+  chat_id: z.string().min(1),
+  wa_message_id: z.string().min(1),
+  status: MessageDeliveryStatusSchema,
+  status_at: z.string().datetime(),
+});
+export type MessageStatusPayload = z.infer<typeof MessageStatusPayloadSchema>;
+
 /** Common envelope wrapping every event sent to n8n. */
 const envelopeBase = {
   event_id: z.string().min(1),
@@ -93,10 +118,18 @@ export const MessageUnsupportedEventSchema = z.object({
 });
 export type MessageUnsupportedEvent = z.infer<typeof MessageUnsupportedEventSchema>;
 
+export const MessageStatusEventSchema = z.object({
+  ...envelopeBase,
+  event: z.literal(EVENT_MESSAGE_STATUS),
+  payload: MessageStatusPayloadSchema,
+});
+export type MessageStatusEvent = z.infer<typeof MessageStatusEventSchema>;
+
 /** Any event the gateway can emit. */
 export const GatewayEventSchema = z.discriminatedUnion("event", [
   MessageReceivedEventSchema,
   MessageUnsupportedEventSchema,
+  MessageStatusEventSchema,
 ]);
 export type GatewayEvent = z.infer<typeof GatewayEventSchema>;
 

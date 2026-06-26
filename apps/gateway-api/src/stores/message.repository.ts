@@ -83,6 +83,18 @@ export class PgMessageRepository implements MessageRepository {
     }
   }
 
+  async updateStatusByWaId(
+    accountId: string,
+    waMessageId: string,
+    status: string,
+  ): Promise<void> {
+    await this.pool.query(
+      `UPDATE gateway_messages SET status = $3
+         WHERE gateway_account_id = $1 AND wa_message_id = $2`,
+      [accountId, waMessageId, status],
+    );
+  }
+
   async getMediaRef(
     accountId: string,
     messageId: string,

@@ -94,6 +94,12 @@ export interface MessageRepository {
   insertOutbound(row: OutboundMessageRow): Promise<{ duplicate: boolean }>;
   getByRequestId(requestId: string): Promise<OutboundMessageRow | null>;
   setOutboundWaId(requestId: string, waMessageId: string): Promise<void>;
+  /** Record a delivery/read receipt on the stored message (bookkeeping). */
+  updateStatusByWaId(
+    accountId: string,
+    waMessageId: string,
+    status: string,
+  ): Promise<void>;
   /** Resolve a stored media attachment for an account's message. */
   getMediaRef(accountId: string, messageId: string): Promise<MediaRef | null>;
   listChats(accountId: string, limit: number): Promise<ChatSummary[]>;

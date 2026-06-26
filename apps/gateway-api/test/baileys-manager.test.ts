@@ -270,6 +270,94 @@ describe("BaileysManager", () => {
     expect(events.filter((e) => e.event_type === "message.received")).toHaveLength(0);
   });
 
+  it("emits message.status from a delivery receipt on a fromMe message", async () => {
+    const { accountRepo, messageRepo, webhookRepo, manager, fake } = setup();
+    await accountRepo.create({
+      id: "a1",
+      external_account_id: "x1",
+      name: "A1",
+      session_path: "/tmp/a1",
+    });
+    await manager.start("a1");
+    fake.emit("messages.update", [
+      {
+        key: {
+          remoteJid: "573009998877@s.whatsapp.net",
+          id: "WAID-OUT-1",
+          fromMe: true,
+        },
+        update: { status: 3 }, // DELIVERY_ACK
+      },
+    ]);
+    await tick();
+    const statuses = webhookRepo.records.filter(
+      (r) => r.event_type === "message.status",
+    );
+    expect(statuses).toHaveLength(1);
+    const payload = statuses[0]?.payload as {
+      wa_message_id?: string;
+      chat_id?: string;
+      status?: string;
+      company_key?: string;
+    };
+    expect(payload?.wa_message_id).toBe("WAID-OUT-1");
+    expect(payload?.chat_id).toBe("573009998877@s.whatsapp.net");
+    expect(payload?.status).toBe("delivered");
+    expect(payload?.company_key).toBe("test-corp");
+    expect(messageRepo.statusByWaId.get("a1:WAID-OUT-1")).toBe("delivered");
+  });
+
+  it("ignores receipts for inbound messages and in-flight updates", async () => {
+    const { accountRepo, webhookRepo, manager, fake } = setup();
+    await accountRepo.create({
+      id: "a1",
+      external_account_id: "x1",
+      name: "A1",
+      session_path: "/tmp/a1",
+    });
+    await manager.start("a1");
+    fake.emit("messages.update", [
+      // not ours
+      { key: { remoteJid: "x@s.whatsapp.net", id: "IN-1", fromMe: false }, update: { status: 4 } },
+      // ours but only PENDING (1) -> no status
+      { key: { remoteJid: "x@s.whatsapp.net", id: "OUT-2", fromMe: true }, update: { status: 1 } },
+      // ours but no status at all (e.g. an edit)
+      { key: { remoteJid: "x@s.whatsapp.net", id: "OUT-3", fromMe: true }, update: {} },
+    ]);
+    await tick();
+    const statuses = webhookRepo.records.filter(
+      (r) => r.event_type === "message.status",
+    );
+    expect(statuses).toHaveLength(0);
+  });
+
+  it("maps a read receipt (message-receipt.update) to read", async () => {
+    const { accountRepo, webhookRepo, manager, fake } = setup();
+    await accountRepo.create({
+      id: "a1",
+      external_account_id: "x1",
+      name: "A1",
+      session_path: "/tmp/a1",
+    });
+    await manager.start("a1");
+    fake.emit("message-receipt.update", [
+      {
+        key: {
+          remoteJid: "573009998877@s.whatsapp.net",
+          id: "WAID-OUT-9",
+          fromMe: true,
+        },
+        receipt: { receiptTimestamp: 1700000000, readTimestamp: 1700000005 },
+      },
+    ]);
+    await tick();
+    const statuses = webhookRepo.records.filter(
+      (r) => r.event_type === "message.status",
+    );
+    expect(statuses).toHaveLength(1);
+    expect((statuses[0]?.payload as { status?: string })?.status).toBe("read");
+  });
+
   it("sends text through the socket", async () => {
     const { accountRepo, manager, fake } = setup();
     await accountRepo.create({
