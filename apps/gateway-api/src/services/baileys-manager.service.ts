@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { Logger } from "pino";
 import {
   EVENT_MESSAGE_RECEIVED,
+  EVENT_MESSAGE_STATUS,
+  type MessageDeliveryStatus,
   type MessageReceivedEvent,
 } from "@lynchpin-whatsapp-gateway/shared-types";
 import type { AccountRepository, MessageRepository } from "../stores/types";
@@ -14,6 +16,9 @@ import {
   type BaileysSocket,
   type ConnectionUpdate,
   type HistorySet,
+  type MessageKey,
+  type MessageReceiptUpdate,
+  type MessageStatusUpdate,
   type MessagesUpsert,
   type SocketFactory,
 } from "./socket.types";
@@ -52,6 +57,28 @@ function digitsFromJid(jid: string | null | undefined): string | null {
   if (!jid) return null;
   const user = jid.split(":")[0]?.split("@")[0];
   return user ?? null;
+}
+
+/**
+ * Map Baileys' numeric message status (proto WebMessageInfo.Status) to our
+ * delivery vocabulary. PENDING (1) is in-flight and yields no event.
+ */
+function deliveryStatusFromCode(
+  code: number | null | undefined,
+): MessageDeliveryStatus | null {
+  switch (code) {
+    case 0: // ERROR
+      return "failed";
+    case 2: // SERVER_ACK
+      return "sent";
+    case 3: // DELIVERY_ACK
+      return "delivered";
+    case 4: // READ
+    case 5: // PLAYED
+      return "read";
+    default:
+      return null;
+  }
 }
 
 /** Owns the live WhatsApp sockets, one per account. */
@@ -103,6 +130,12 @@ export class BaileysManager {
     });
     socket.ev.on("messaging-history.set", (h) => {
       void this.onHistorySet(accountId, h);
+    });
+    socket.ev.on("messages.update", (u) => {
+      void this.onStatusUpdate(accountId, u);
+    });
+    socket.ev.on("message-receipt.update", (u) => {
+      void this.onReceiptUpdate(accountId, u);
     });
 
     await this.deps.accountRepo.update(accountId, {
@@ -346,6 +379,73 @@ export class BaileysManager {
         received.payload.message.text ?? `(${received.payload.message.type})`,
       );
     }
+  }
+
+  /**
+   * Delivery/read receipts for our outbound messages arrive as `messages.update`
+   * with a numeric `update.status`. Emit a `message.status` event per receipt so
+   * Odoo can advance the matching message; ignore inbound and in-flight updates.
+   */
+  private async onStatusUpdate(
+    accountId: string,
+    updates: MessageStatusUpdate[],
+  ): Promise<void> {
+    for (const u of updates ?? []) {
+      if (!u.key?.fromMe) continue; // receipts are only for messages we sent
+      const status = deliveryStatusFromCode(u.update?.status);
+      if (!status) continue;
+      await this.emitStatus(accountId, u.key, status);
+    }
+  }
+
+  /**
+   * Per-recipient receipts (`message-receipt.update`) carry timestamps rather
+   * than a status code. A read timestamp implies read; otherwise a delivery
+   * timestamp implies delivered. Odoo applies these monotonically, so any
+   * overlap with `messages.update` is harmless.
+   */
+  private async onReceiptUpdate(
+    accountId: string,
+    updates: MessageReceiptUpdate[],
+  ): Promise<void> {
+    for (const u of updates ?? []) {
+      if (!u.key?.fromMe) continue;
+      const status: MessageDeliveryStatus | null = u.receipt?.readTimestamp
+        ? "read"
+        : u.receipt?.receiptTimestamp
+          ? "delivered"
+          : null;
+      if (!status) continue;
+      await this.emitStatus(accountId, u.key, status);
+    }
+  }
+
+  /** Record the receipt on our own row and emit the `message.status` event. */
+  private async emitStatus(
+    accountId: string,
+    key: MessageKey,
+    status: MessageDeliveryStatus,
+  ): Promise<void> {
+    const waMessageId = key.id;
+    const chatId = key.remoteJid;
+    if (!waMessageId || !chatId) return;
+    await this.deps.messageRepo.updateStatusByWaId(
+      accountId,
+      waMessageId,
+      status,
+    );
+    await this.deps.webhook.emit(
+      EVENT_MESSAGE_STATUS,
+      accountId,
+      {
+        company_key: this.deps.companyKey?.() ?? null,
+        chat_id: chatId,
+        wa_message_id: waMessageId,
+        status,
+        status_at: new Date().toISOString(),
+      },
+      `${status} ${waMessageId}`,
+    );
   }
 
   /** Download a message's media via the account socket and store it on disk. */

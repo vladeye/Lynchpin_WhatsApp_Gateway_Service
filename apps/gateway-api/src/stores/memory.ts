@@ -145,6 +145,15 @@ export class InMemoryMessageRepository implements MessageRepository {
     if (row) row.wa_message_id = waMessageId;
   }
 
+  readonly statusByWaId = new Map<string, string>();
+  async updateStatusByWaId(
+    accountId: string,
+    waMessageId: string,
+    status: string,
+  ): Promise<void> {
+    this.statusByWaId.set(`${accountId}:${waMessageId}`, status);
+  }
+
   async getMediaRef(
     accountId: string,
     messageId: string,
