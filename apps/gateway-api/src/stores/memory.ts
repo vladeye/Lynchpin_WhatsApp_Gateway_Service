@@ -1,8 +1,10 @@
 import type {
   ChatMessage,
   ChatSummary,
+  ConversationRoute,
   EventLogDetail,
   EventLogItem,
+  RouteStatus,
 } from "@lynchpin-whatsapp-gateway/shared-types";
 import type {
   AccountRecord,
@@ -16,6 +18,7 @@ import type {
   MediaRef,
   MessageRepository,
   OutboundMessageRow,
+  RouteRepository,
   SettingRow,
   DueDelivery,
   SettingsRepository,
@@ -407,6 +410,38 @@ export class InMemoryAdminRepository implements AdminRepository {
 
   async count(): Promise<number> {
     return this.byUsername.size;
+  }
+}
+
+export class InMemoryRouteRepository implements RouteRepository {
+  readonly routes = new Map<string, ConversationRoute>();
+
+  private key(accountId: string, chatId: string): string {
+    return `${accountId}:${chatId}`;
+  }
+
+  async getRoute(
+    gatewayAccountId: string,
+    chatId: string,
+  ): Promise<ConversationRoute | null> {
+    return this.routes.get(this.key(gatewayAccountId, chatId)) ?? null;
+  }
+
+  async setRoute(
+    gatewayAccountId: string,
+    chatId: string,
+    owner: string,
+    status: RouteStatus,
+  ): Promise<ConversationRoute> {
+    const route: ConversationRoute = {
+      gateway_account_id: gatewayAccountId,
+      chat_id: chatId,
+      owner,
+      status,
+      updated_at: new Date().toISOString(),
+    };
+    this.routes.set(this.key(gatewayAccountId, chatId), route);
+    return { ...route };
   }
 }
 

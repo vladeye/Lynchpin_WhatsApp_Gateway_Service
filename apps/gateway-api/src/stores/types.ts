@@ -2,8 +2,10 @@ import type {
   AccountState,
   ChatMessage,
   ChatSummary,
+  ConversationRoute,
   EventLogDetail,
   EventLogItem,
+  RouteStatus,
 } from "@lynchpin-whatsapp-gateway/shared-types";
 
 export interface AccountRecord {
@@ -44,6 +46,21 @@ export interface CreateAccountRecord {
   external_account_id: string;
   name: string;
   session_path: string;
+}
+
+/** Cached conversation ownership/route (a cache of Odoo's decisions). */
+export interface RouteRepository {
+  getRoute(
+    gatewayAccountId: string,
+    chatId: string,
+  ): Promise<ConversationRoute | null>;
+  /** Upsert the route's owner + status. */
+  setRoute(
+    gatewayAccountId: string,
+    chatId: string,
+    owner: string,
+    status: RouteStatus,
+  ): Promise<ConversationRoute>;
 }
 
 export interface AccountRepository {

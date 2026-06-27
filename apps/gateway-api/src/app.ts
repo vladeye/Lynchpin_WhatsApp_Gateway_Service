@@ -8,11 +8,13 @@ import { apiRoutes } from "./routes/api";
 import { accountsRoutes } from "./routes/accounts";
 import { messagesRoutes } from "./routes/messages";
 import { eventsRoutes } from "./routes/events";
+import { routesRoutes } from "./routes/routes";
 import { parametersRoutes } from "./routes/parameters";
 import { authRoutes } from "./routes/auth";
 import { registerAuthGuard } from "./plugins/auth-guard";
 import type { AccountService } from "./services/account.service";
 import type { AuthService } from "./services/auth.service";
+import type { RouteService } from "./services/route.service";
 import type { SettingsService } from "./services/settings.service";
 import type { WebhookRepository } from "./stores/types";
 import type { Config } from "./config";
@@ -20,6 +22,7 @@ import type { Config } from "./config";
 export interface AppDeps {
   accountService: AccountService;
   authService: AuthService;
+  routeService: RouteService;
   settings: SettingsService;
   webhookRepo: WebhookRepository;
   config: Config;
@@ -55,8 +58,15 @@ export async function buildApp(
   await app.register(healthRoutes);
 
   if (options.deps) {
-    const { accountService, authService, settings, webhookRepo, config, outboxKick } =
-      options.deps;
+    const {
+      accountService,
+      authService,
+      routeService,
+      settings,
+      webhookRepo,
+      config,
+      outboxKick,
+    } = options.deps;
     registerAuthGuard(app, authService, settings);
     await app.register(
       authRoutes(authService, settings, {
@@ -66,6 +76,7 @@ export async function buildApp(
     await app.register(accountsRoutes(accountService));
     await app.register(messagesRoutes(accountService));
     await app.register(eventsRoutes(webhookRepo, outboxKick));
+    await app.register(routesRoutes(routeService));
     await app.register(parametersRoutes(settings));
   }
 

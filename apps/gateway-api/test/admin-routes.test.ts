@@ -9,10 +9,12 @@ import { SettingsService } from "../src/services/settings.service";
 import { BaileysManager } from "../src/services/baileys-manager.service";
 import { MediaStore } from "../src/services/media-store.service";
 import { WebhookDispatcher } from "../src/services/webhook-dispatch.service";
+import { RouteService } from "../src/services/route.service";
 import {
   InMemoryAccountRepository,
   InMemoryAdminRepository,
   InMemoryMessageRepository,
+  InMemoryRouteRepository,
   InMemorySettingsRepository,
   InMemoryWebhookRepository,
 } from "../src/stores/memory";
@@ -35,6 +37,7 @@ async function buildTestApp() {
   await authService.seedAdmin("admin", "secret123");
 
   const webhook = new WebhookDispatcher(webhookRepo);
+  const routeService = new RouteService(new InMemoryRouteRepository());
   const mediaStore = new MediaStore(path.join(tmpdir(), "lp-admin-media"));
   const manager = new BaileysManager({
     socketFactory: async () => {
@@ -56,7 +59,7 @@ async function buildTestApp() {
   );
 
   const app = await buildApp({
-    deps: { accountService, authService, settings, webhookRepo, config },
+    deps: { accountService, authService, routeService, settings, webhookRepo, config },
   });
   return { app, webhookRepo, settings };
 }
