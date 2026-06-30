@@ -346,13 +346,30 @@ export class BaileysManager {
     options: { emitWebhook: boolean },
   ): Promise<void> {
     const event = normalizeInbound(accountId, msg);
-    if (event.event !== EVENT_MESSAGE_RECEIVED) return;
+    if (event.event !== EVENT_MESSAGE_RECEIVED) {
+      this.deps.logger?.info(
+        { accountId, event: event.event, keys: msg.message ? Object.keys(msg.message) : null },
+        "captureMessage: not a message.received (skipped)",
+      );
+      return;
+    }
     const received = event as MessageReceivedEvent;
     const fromMe = Boolean(msg.key?.fromMe);
     const id = randomUUID();
 
     // Download and persist any attachment so the conversation view can show it.
     const { media } = received.payload.message;
+    this.deps.logger?.info(
+      {
+        accountId,
+        chatId: received.payload.conversation.chat_id,
+        type: received.payload.message.type,
+        hasMedia: Boolean(media),
+        mimetype: media?.mimetype ?? null,
+        fromMe,
+      },
+      "captureMessage: debug",
+    );
     const saved = media
       ? await this.saveMedia(accountId, id, msg, media)
       : null;
