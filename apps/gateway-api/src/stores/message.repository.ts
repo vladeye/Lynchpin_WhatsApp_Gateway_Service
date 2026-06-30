@@ -99,10 +99,16 @@ export class PgMessageRepository implements MessageRepository {
     accountId: string,
     messageId: string,
   ): Promise<MediaRef | null> {
+    // Resolve by the internal message id (used by the console) OR the WhatsApp
+    // message id (used by Odoo/n8n, which only knows wa_message_id). Both are
+    // effectively unique, so there is no realistic collision.
     const { rows } = await this.pool.query<MediaRef>(
       `SELECT media_path, media_mime, media_filename
          FROM gateway_messages
-        WHERE gateway_account_id = $1 AND id = $2 AND media_path IS NOT NULL`,
+        WHERE gateway_account_id = $1
+          AND (id = $2 OR wa_message_id = $2)
+          AND media_path IS NOT NULL
+        LIMIT 1`,
       [accountId, messageId],
     );
     return rows[0] ?? null;
