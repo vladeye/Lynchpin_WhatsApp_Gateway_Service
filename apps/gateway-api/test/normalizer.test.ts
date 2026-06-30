@@ -120,6 +120,34 @@ describe("normalizeInbound", () => {
     expect(GatewayEventSchema.safeParse(event).success).toBe(true);
   });
 
+  it("classifies a voice note as audio even with an empty default conversation field (@lid)", () => {
+    // WhatsApp @lid messages arrive as protobuf objects whose unset scalar
+    // fields read as "" — a voice note must still be detected as audio, not
+    // misclassified as empty text (which skipped the media download).
+    const event = normalizeInbound(
+      "acc_001",
+      textMessage({
+        key: { remoteJid: "235528154808560@lid", id: "BAE7", fromMe: false },
+        message: {
+          conversation: "",
+          audioMessage: { mimetype: "audio/ogg; codecs=opus", fileLength: 4096 },
+          messageContextInfo: {},
+        } as never,
+      }),
+      FIXED,
+    );
+    expect(event).toMatchObject({
+      event: EVENT_MESSAGE_RECEIVED,
+      payload: {
+        message: {
+          type: "audio",
+          text: null,
+          media: { mimetype: "audio/ogg; codecs=opus", filename: null, size: 4096 },
+        },
+      },
+    });
+  });
+
   it("normalizes a document message using its filename", () => {
     const event = normalizeInbound(
       "acc_001",

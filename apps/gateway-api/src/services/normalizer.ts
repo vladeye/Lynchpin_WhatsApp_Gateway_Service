@@ -63,11 +63,14 @@ function phoneFromJid(jid: string): string {
 }
 
 function extractText(content: BaileysMessageContent): string | null {
-  if (typeof content.conversation === "string") {
+  // Use only non-empty strings: protobuf-decoded messages expose unset scalar
+  // fields as "" rather than undefined.
+  if (typeof content.conversation === "string" && content.conversation.length > 0) {
     return content.conversation;
   }
-  if (typeof content.extendedTextMessage?.text === "string") {
-    return content.extendedTextMessage.text;
+  const ext = content.extendedTextMessage?.text;
+  if (typeof ext === "string" && ext.length > 0) {
+    return ext;
   }
   return null;
 }
@@ -129,9 +132,9 @@ function detectMedia(
 }
 
 function isText(content: BaileysMessageContent | null | undefined): boolean {
-  return Boolean(
-    content && (content.conversation != null || content.extendedTextMessage != null),
-  );
+  // Treat only non-empty text as text; an unset protobuf `conversation` reads as
+  // "" and must not count (it would mask media messages on @lid chats).
+  return extractText(content ?? {}) != null;
 }
 
 /** First message key (used to label genuinely unsupported types). */
@@ -169,27 +172,31 @@ export function normalizeInbound(
   let text: string | null;
   let media: MediaDescriptor | null;
 
-  if (isText(content)) {
+  // Detect media BEFORE text. WhatsApp @lid messages arrive as protobuf objects
+  // whose unset scalar fields (e.g. `conversation`) read as "" rather than
+  // undefined; checking text first would misclassify a voice note as empty text
+  // and skip the media download. A genuine text message has no media key, so it
+  // still falls through to the text branch.
+  const detected = detectMedia(content);
+  if (detected) {
+    type = detected.type;
+    text = detected.caption;
+    media = detected.media;
+  } else if (isText(content)) {
     type = "text";
     text = extractText(content ?? {});
     media = null;
   } else {
-    const detected = detectMedia(content);
-    if (!detected) {
-      return {
-        event_id: eventId,
-        event: EVENT_MESSAGE_UNSUPPORTED,
-        gateway_account_id: gatewayAccountId,
-        occurred_at: occurredAt,
-        payload: {
-          message_type: firstKey(content),
-          reason: "unsupported_message_type",
-        },
-      };
-    }
-    type = detected.type;
-    text = detected.caption;
-    media = detected.media;
+    return {
+      event_id: eventId,
+      event: EVENT_MESSAGE_UNSUPPORTED,
+      gateway_account_id: gatewayAccountId,
+      occurred_at: occurredAt,
+      payload: {
+        message_type: firstKey(content),
+        reason: "unsupported_message_type",
+      },
+    };
   }
 
   return {
