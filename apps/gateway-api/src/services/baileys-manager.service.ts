@@ -472,10 +472,22 @@ export class BaileysManager {
     media: { mimetype: string | null; filename: string | null },
   ): Promise<{ relativePath: string; size: number } | null> {
     const downloader = this.runtimes.get(accountId)?.downloadMedia;
-    if (!downloader || !this.deps.mediaStore) return null;
+    if (!downloader || !this.deps.mediaStore) {
+      this.deps.logger?.warn(
+        { accountId, messageId, mimetype: media.mimetype, hasDownloader: Boolean(downloader) },
+        "saveMedia skipped: no downloader or media store",
+      );
+      return null;
+    }
     try {
       const buffer = await downloader(msg);
-      if (!buffer || buffer.length === 0) return null;
+      if (!buffer || buffer.length === 0) {
+        this.deps.logger?.warn(
+          { accountId, messageId, mimetype: media.mimetype },
+          "saveMedia: empty media buffer (download returned nothing)",
+        );
+        return null;
+      }
       return await this.deps.mediaStore.save(
         accountId,
         messageId,

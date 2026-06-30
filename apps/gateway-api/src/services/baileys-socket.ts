@@ -19,6 +19,8 @@ import type {
 } from "./socket.types";
 
 const silentLogger = pino({ level: "silent" });
+// Visible logger for media-download failures, which were previously swallowed.
+const mediaLogger = pino({ name: "baileys-media" });
 
 /**
  * Real Baileys socket factory. Kept in its own module so unit tests can inject
@@ -64,7 +66,13 @@ export async function createBaileysSocket({
           },
         );
         return buffer as Buffer;
-      } catch {
+      } catch (err) {
+        // Never swallow silently: a failed media download otherwise stores the
+        // message with no media (empty bubble) and leaves no trace in the logs.
+        mediaLogger.error(
+          { err, accountId, waMessageId: msg.key?.id },
+          "downloadMediaMessage failed",
+        );
         return null;
       }
     },
