@@ -106,7 +106,7 @@ export class PgMessageRepository implements MessageRepository {
       `SELECT media_path, media_mime, media_filename
          FROM gateway_messages
         WHERE gateway_account_id = $1
-          AND (id = $2 OR wa_message_id = $2)
+          AND (id::text = $2 OR wa_message_id = $2)
           AND media_path IS NOT NULL
         LIMIT 1`,
       [accountId, messageId],
