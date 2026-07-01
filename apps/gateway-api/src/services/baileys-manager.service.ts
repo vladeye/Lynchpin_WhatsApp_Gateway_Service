@@ -94,6 +94,11 @@ function deliveryStatusFromCode(
 export class BaileysManager {
   private readonly runtimes = new Map<string, Runtime>();
 
+  // Learned mapping from a contact @lid JID to their phone-number JID
+  // (<phone>@s.whatsapp.net). WhatsApp 1:1 delivery needs the phone JID; @lid
+  // inbound messages carry the sender PN, captured here to address replies.
+  private readonly lidPhone = new Map<string, string>();
+
   constructor(private readonly deps: BaileysManagerDeps) {}
 
   isRunning(accountId: string): boolean {
@@ -146,6 +151,9 @@ export class BaileysManager {
     socket.ev.on("message-receipt.update", (u) => {
       void this.onReceiptUpdate(accountId, u);
     });
+    socket.ev.on("chats.phoneNumberShare", (u) => {
+      this.rememberLidPhone(u?.lid, u?.jid, accountId);
+    });
 
     await this.deps.accountRepo.update(accountId, {
       state: "connecting",
@@ -162,6 +170,59 @@ export class BaileysManager {
     return {};
   }
 
+  // Record a contact @lid -> phone-number JID mapping (idempotent).
+  private rememberLidPhone(
+    lid: string | null | undefined,
+    phoneJid: string | null | undefined,
+    accountId: string,
+  ): void {
+    if (!lid || !phoneJid || !lid.endsWith("@lid")) return;
+    const normalized = phoneJid.includes("@")
+      ? phoneJid
+      : `${phoneJid}@s.whatsapp.net`;
+    if (this.lidPhone.get(lid) === normalized) return;
+    this.lidPhone.set(lid, normalized);
+    this.deps.logger?.info(
+      { accountId, lid, phoneJid: normalized },
+      "lid->phone mapping learned",
+    );
+  }
+
+  // Best-effort capture of the sender phone JID from a raw inbound message.
+  // Baileys surfaces it inconsistently, so probe known fields; the full raw key
+  // is also logged (messages.upsert) to confirm the shape on this build.
+  private captureLidPhoneFromMessage(
+    accountId: string,
+    msg: BaileysMessage,
+  ): void {
+    const key = msg.key as unknown as
+      | ({ remoteJid?: string | null; fromMe?: boolean | null } & Record<
+          string,
+          unknown
+        >)
+      | undefined;
+    if (!key || key.fromMe) return;
+    const lid = key.remoteJid ?? undefined;
+    if (!lid || !lid.endsWith("@lid")) return;
+    const pn =
+      (key.senderPn as string | undefined) ??
+      (key.sender_pn as string | undefined) ??
+      (key.participantPn as string | undefined) ??
+      (key.remoteJidAlt as string | undefined) ??
+      ((msg as unknown as Record<string, unknown>).senderPn as
+        | string
+        | undefined);
+    if (pn) this.rememberLidPhone(lid, pn, accountId);
+  }
+
+  // Choose the JID to send to. WhatsApp 1:1 delivery needs the phone-number JID,
+  // so when the conversation id is an @lid we swap in the learned phone JID.
+  // Falls back to the @lid until the phone is known.
+  private resolveSendJid(chatId: string): string {
+    if (!chatId.endsWith("@lid")) return chatId;
+    return this.lidPhone.get(chatId) ?? chatId;
+  }
+
   async sendText(
     accountId: string,
     chatId: string,
@@ -171,7 +232,12 @@ export class BaileysManager {
     if (!runtime) {
       throw new Error("ACCOUNT_NOT_CONNECTED");
     }
-    const res = await runtime.socket.sendMessage(chatId, { text });
+    const target = this.resolveSendJid(chatId);
+    this.deps.logger?.info(
+      { accountId, chatId, target, resolved: target !== chatId },
+      "sendText target",
+    );
+    const res = await runtime.socket.sendMessage(target, { text });
     return res?.key?.id ?? null;
   }
 
@@ -312,9 +378,13 @@ export class BaileysManager {
         keys: upsert.messages.map((m) =>
           m.message ? Object.keys(m.message) : null,
         ),
+        rawKeys: upsert.messages.map((m) => m.key ?? null),
       },
       "messages.upsert",
     );
+    for (const m of upsert.messages) {
+      this.captureLidPhoneFromMessage(accountId, m);
+    }
     if (upsert.type !== "notify" && upsert.type !== "append") return;
     for (const msg of upsert.messages) {
       await this.captureMessage(accountId, msg, { emitWebhook: true });

@@ -52,6 +52,10 @@ export interface BaileysSocket {
       event: "message-receipt.update",
       listener: (u: MessageReceiptUpdate[]) => void,
     ): void;
+    on(
+      event: "chats.phoneNumberShare",
+      listener: (u: { lid?: string | null; jid?: string | null }) => void,
+    ): void;
   };
   user?: {
     id?: string | null;
