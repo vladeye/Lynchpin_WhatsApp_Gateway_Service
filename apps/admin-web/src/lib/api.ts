@@ -34,6 +34,24 @@ export interface EventsQuery {
   status?: string;
 }
 
+export interface ReadingDay {
+  start: number;
+  end: number;
+  reversed: boolean;
+}
+export interface ReadingSchedule {
+  timezone: string;
+  days: {
+    mon: ReadingDay;
+    tue: ReadingDay;
+    wed: ReadingDay;
+    thu: ReadingDay;
+    fri: ReadingDay;
+    sat: ReadingDay;
+    sun: ReadingDay;
+  };
+}
+
 /** On an expired/absent session, bounce to the login screen (except auth calls). */
 function onUnauthorized(path: string): void {
   if (path.startsWith("/api/auth/")) return;
@@ -157,4 +175,15 @@ export const api = {
     send<{ api_key: string }>("/api/security/rotate-api-key", "POST").then(
       (r) => r.api_key,
     ),
+
+  getSchedule: (id: string) =>
+    getJson<{ schedule: ReadingSchedule }>(
+      `/api/accounts/${id}/schedule`,
+    ).then((r) => r.schedule),
+  saveSchedule: (id: string, schedule: ReadingSchedule) =>
+    send<{ schedule: ReadingSchedule }>(
+      `/api/accounts/${id}/schedule`,
+      "PUT",
+      schedule,
+    ).then((r) => r.schedule),
 };

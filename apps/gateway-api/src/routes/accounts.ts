@@ -9,6 +9,8 @@ import {
   AccountNotFoundError,
   type AccountService,
 } from "../services/account.service";
+import { ReadingScheduleSchema } from "../services/schedule.service";
+import type { ScheduleService } from "../services/schedule.service";
 
 function fail(
   reply: FastifyReply,
@@ -23,8 +25,31 @@ interface IdParams {
   id: string;
 }
 
-export function accountsRoutes(service: AccountService) {
+export function accountsRoutes(
+  service: AccountService,
+  schedule: ScheduleService,
+) {
   return async function register(app: FastifyInstance): Promise<void> {
+    app.get<{ Params: IdParams }>(
+      "/api/accounts/:id/schedule",
+      async (req) => ({
+        success: true,
+        schedule: await schedule.get(req.params.id),
+      }),
+    );
+
+    app.put<{ Params: IdParams }>(
+      "/api/accounts/:id/schedule",
+      async (req, reply) => {
+        const parsed = ReadingScheduleSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return fail(reply, 400, "INVALID_REQUEST", "Invalid schedule");
+        }
+        await schedule.save(req.params.id, parsed.data);
+        return { success: true, schedule: parsed.data };
+      },
+    );
+
     app.get("/api/accounts", async () => ({
       success: true,
       accounts: await service.list(),

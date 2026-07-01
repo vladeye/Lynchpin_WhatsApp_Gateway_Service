@@ -12,6 +12,7 @@ import { ConversationsPage } from "./pages/Conversations";
 import { LogsPage } from "./pages/Logs";
 import { ParametersPage } from "./pages/Parameters";
 import { SecurityPage } from "./pages/Security";
+import { SchedulePage } from "./pages/Schedule";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ const router = createBrowserRouter([
       { path: "/dashboard", element: <DashboardPage /> },
       { path: "/accounts", element: <AccountsPage /> },
       { path: "/accounts/:id/conversations", element: <ConversationsPage /> },
+      { path: "/accounts/:id/schedule", element: <SchedulePage /> },
       { path: "/logs", element: <LogsPage /> },
       { path: "/parameters", element: <ParametersPage /> },
       { path: "/security", element: <SecurityPage /> },

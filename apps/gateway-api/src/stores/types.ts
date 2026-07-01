@@ -49,6 +49,33 @@ export interface CreateAccountRecord {
 }
 
 /** Cached conversation ownership/route (a cache of Odoo's decisions). */
+export interface ReadingDay {
+  /** minutes since midnight, [0,1440] */
+  start: number;
+  end: number;
+  /** when true, the green (reading) area is OUTSIDE [start,end] */
+  reversed: boolean;
+}
+
+export interface ReadingSchedule {
+  timezone: string;
+  days: {
+    mon: ReadingDay;
+    tue: ReadingDay;
+    wed: ReadingDay;
+    thu: ReadingDay;
+    fri: ReadingDay;
+    sat: ReadingDay;
+    sun: ReadingDay;
+  };
+}
+
+export interface ScheduleRepository {
+  get(accountId: string): Promise<ReadingSchedule | null>;
+  upsert(accountId: string, schedule: ReadingSchedule): Promise<void>;
+  all(): Promise<Map<string, ReadingSchedule>>;
+}
+
 export interface RouteRepository {
   getRoute(
     gatewayAccountId: string,

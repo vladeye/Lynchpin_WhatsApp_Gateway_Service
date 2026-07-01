@@ -288,6 +288,12 @@ export function AccountsPage() {
                       View
                     </button>
                     <button
+                      onClick={() => navigate(`/accounts/${a.id}/schedule`)}
+                      className="rounded-md border border-slate-200 px-2 py-1 hover:bg-slate-50"
+                    >
+                      Schedule
+                    </button>
+                    <button
                       onClick={() =>
                         action.mutate({ fn: () => api.disconnect(a.id, true) })
                       }

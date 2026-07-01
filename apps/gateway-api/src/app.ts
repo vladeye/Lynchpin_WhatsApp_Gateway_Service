@@ -15,6 +15,7 @@ import { registerAuthGuard } from "./plugins/auth-guard";
 import type { AccountService } from "./services/account.service";
 import type { AuthService } from "./services/auth.service";
 import type { RouteService } from "./services/route.service";
+import type { ScheduleService } from "./services/schedule.service";
 import type { SettingsService } from "./services/settings.service";
 import type { WebhookRepository } from "./stores/types";
 import type { Config } from "./config";
@@ -23,6 +24,7 @@ export interface AppDeps {
   accountService: AccountService;
   authService: AuthService;
   routeService: RouteService;
+  scheduleService: ScheduleService;
   settings: SettingsService;
   webhookRepo: WebhookRepository;
   config: Config;
@@ -62,6 +64,7 @@ export async function buildApp(
       accountService,
       authService,
       routeService,
+      scheduleService,
       settings,
       webhookRepo,
       config,
@@ -73,7 +76,7 @@ export async function buildApp(
         secureCookie: config.NODE_ENV === "production",
       }),
     );
-    await app.register(accountsRoutes(accountService));
+    await app.register(accountsRoutes(accountService, scheduleService));
     await app.register(messagesRoutes(accountService));
     await app.register(eventsRoutes(webhookRepo, outboxKick));
     await app.register(routesRoutes(routeService));

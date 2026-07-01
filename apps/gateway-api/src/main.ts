@@ -11,6 +11,8 @@ import { PgRouteRepository } from "./stores/route.repository";
 import { PgAdminRepository } from "./stores/admin.repository";
 import { PgSettingsRepository } from "./stores/settings.repository";
 import { RouteService } from "./services/route.service";
+import { PgScheduleRepository } from "./stores/schedule.repository";
+import { ScheduleService } from "./services/schedule.service";
 import { WebhookDispatcher } from "./services/webhook-dispatch.service";
 import { OutboxDispatcher } from "./services/outbox-dispatcher.service";
 import { BaileysManager } from "./services/baileys-manager.service";
@@ -37,6 +39,10 @@ async function main(): Promise<void> {
   const settingsRepo = new PgSettingsRepository(pool);
 
   const routeService = new RouteService(routeRepo);
+
+  const scheduleRepo = new PgScheduleRepository(pool);
+  const scheduleService = new ScheduleService(scheduleRepo);
+  await scheduleService.load();
 
   const settings = new SettingsService(settingsRepo, config, logger);
   await settings.load();
@@ -72,6 +78,7 @@ async function main(): Promise<void> {
     syncFullHistory: () => settings.syncFullHistory(),
     companyKey: () => settings.companyKey(),
     routeFor: (accountId, chatId) => routeService.routeFor(accountId, chatId),
+    readingAllowed: (accountId) => scheduleService.readingAllowed(accountId),
     logger,
   });
 
@@ -94,6 +101,7 @@ async function main(): Promise<void> {
       accountService,
       authService,
       routeService,
+      scheduleService,
       settings,
       webhookRepo,
       config,

@@ -47,6 +47,8 @@ export interface BaileysManagerDeps {
   socketFactory: SocketFactory;
   accountRepo: AccountRepository;
   messageRepo: MessageRepository;
+  /** Gate: may this account forward inbound now? Absent = always. */
+  readingAllowed?: (accountId: string) => boolean;
   webhook: WebhookDispatcher;
   sessionRoot: string;
   mediaStore?: MediaStore;
@@ -525,6 +527,13 @@ export class BaileysManager {
     });
     if (!stored || fromMe) return; // duplicate, or our own message
     if (options.emitWebhook) {
+      if (this.deps.readingAllowed && !this.deps.readingAllowed(accountId)) {
+        this.deps.logger?.info(
+          { accountId, chatId: received.payload.conversation.chat_id },
+          "inbound stored but not forwarded (reading schedule blocked)",
+        );
+        return;
+      }
       // Stamp the cached owner + route status (a cache of Odoo's decisions);
       // defaults to odoo/active. The gateway always emits — owner/route_status
       // are labels n8n/Odoo act on; the gateway never decides ownership.

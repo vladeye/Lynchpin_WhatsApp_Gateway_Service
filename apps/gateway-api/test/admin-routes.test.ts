@@ -10,6 +10,7 @@ import { BaileysManager } from "../src/services/baileys-manager.service";
 import { MediaStore } from "../src/services/media-store.service";
 import { WebhookDispatcher } from "../src/services/webhook-dispatch.service";
 import { RouteService } from "../src/services/route.service";
+import { ScheduleService } from "../src/services/schedule.service";
 import {
   InMemoryAccountRepository,
   InMemoryAdminRepository,
@@ -38,6 +39,11 @@ async function buildTestApp() {
 
   const webhook = new WebhookDispatcher(webhookRepo);
   const routeService = new RouteService(new InMemoryRouteRepository());
+  const scheduleService = new ScheduleService({
+    get: async () => null,
+    upsert: async () => {},
+    all: async () => new Map(),
+  });
   const mediaStore = new MediaStore(path.join(tmpdir(), "lp-admin-media"));
   const manager = new BaileysManager({
     socketFactory: async () => {
@@ -59,7 +65,15 @@ async function buildTestApp() {
   );
 
   const app = await buildApp({
-    deps: { accountService, authService, routeService, settings, webhookRepo, config },
+    deps: {
+      accountService,
+      authService,
+      routeService,
+      scheduleService,
+      settings,
+      webhookRepo,
+      config,
+    },
   });
   return { app, webhookRepo, settings };
 }
