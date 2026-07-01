@@ -172,12 +172,37 @@ export class BaileysManager {
 
     if (options.usePairingCode && !isRegistered && options.phoneNumber) {
       const phone = options.phoneNumber.replace(/[^0-9]/g, "");
-      const pairingCode = await socket.requestPairingCode(phone);
+      const pairingCode = await this.requestPairingCodeWhenReady(socket, phone);
       await this.deps.accountRepo.update(accountId, { state: "waiting_code" });
       return { pairingCode };
     }
 
     return {};
+  }
+
+  /**
+   * Baileys requestPairingCode sends a node immediately, which throws
+   * "Connection Closed" until the WebSocket is open; makeWASocket opens it
+   * asynchronously. Retry with a short delay until the socket is ready.
+   */
+  private async requestPairingCodeWhenReady(
+    socket: BaileysSocket,
+    phone: string,
+  ): Promise<string> {
+    const RETRIES = 16;
+    const DELAY_MS = 500;
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < RETRIES; attempt += 1) {
+      try {
+        return await socket.requestPairingCode(phone);
+      } catch (err) {
+        lastErr = err;
+        await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
+      }
+    }
+    throw lastErr instanceof Error
+      ? lastErr
+      : new Error("pairing code request failed");
   }
 
   // Record a contact @lid -> phone-number JID mapping (idempotent).

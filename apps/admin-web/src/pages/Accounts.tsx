@@ -164,15 +164,28 @@ function ConnectDialog({
               />
               <button
                 onClick={() => codeConnect.mutate()}
-                disabled={codeConnect.isPending || phone.length < 5}
+                disabled={codeConnect.isPending || phone.trim().length < 5}
                 className="mt-3 w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
               >
-                Request pairing code
+                {codeConnect.isPending
+                  ? "Requesting code…"
+                  : "Request pairing code"}
               </button>
-              {codeConnect.data?.pairing_code && (
-                <p className="mt-4 text-2xl font-bold tracking-widest text-slate-900">
-                  {codeConnect.data.pairing_code}
+              {codeConnect.isError && (
+                <p className="mt-3 text-sm text-red-600">
+                  {String(codeConnect.error)}
                 </p>
+              )}
+              {codeConnect.data?.pairing_code && (
+                <>
+                  <p className="mt-4 text-2xl font-bold tracking-widest text-slate-900">
+                    {codeConnect.data.pairing_code}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-500">
+                    On the phone: WhatsApp → Linked devices → Link with phone
+                    number → enter this code
+                  </p>
+                </>
               )}
             </div>
           )}
