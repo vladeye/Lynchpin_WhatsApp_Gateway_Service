@@ -29,10 +29,19 @@ interface Runtime {
   socket: BaileysSocket;
   stopped: boolean;
   reconnectAttempts: number;
+  conflictCount: number;
+  stableTimer?: ReturnType<typeof setTimeout>;
   downloadMedia?: (msg: BaileysMessage) => Promise<Buffer | null>;
 }
 
 const BACKOFF_MS = [2000, 5000, 15000, 30000, 60000];
+// WhatsApp stream-error status for "conflict: replaced" (another client took
+// over the session) — DisconnectReason.connectionReplaced in Baileys.
+const CONFLICT_STATUS = 440;
+// Give up reconnecting after this many consecutive session-replaced conflicts.
+const MAX_CONFLICTS = 5;
+// A connection must stay open this long before we clear the reconnect backoff.
+const STABLE_MS = 10_000;
 
 export interface BaileysManagerDeps {
   socketFactory: SocketFactory;
@@ -129,6 +138,7 @@ export class BaileysManager {
       socket,
       stopped: false,
       reconnectAttempts: 0,
+      conflictCount: 0,
       downloadMedia,
     };
     this.runtimes.set(accountId, runtime);
@@ -273,17 +283,18 @@ export class BaileysManager {
     u: ConnectionUpdate,
   ): Promise<void> {
     const runtime = this.runtimes.get(accountId);
+    const statusCode = (
+      u.lastDisconnect?.error as
+        | { output?: { statusCode?: number } }
+        | undefined
+    )?.output?.statusCode;
 
     this.deps.logger?.info(
       {
         accountId,
         connection: u.connection,
         hasQr: Boolean(u.qr),
-        statusCode: (
-          u.lastDisconnect?.error as
-            | { output?: { statusCode?: number } }
-            | undefined
-        )?.output?.statusCode,
+        statusCode,
       },
       "connection.update",
     );
@@ -297,7 +308,17 @@ export class BaileysManager {
 
     if (u.connection === "open") {
       const phone = digitsFromJid(runtime?.socket.user?.id);
-      if (runtime) runtime.reconnectAttempts = 0;
+      if (runtime) {
+        // Clear the backoff only once the socket proves STABLE. A connection
+        // that opens then is immediately "replaced" (conflict 440) must keep
+        // its growing backoff, or it flaps ~1.5x/sec fighting the other client.
+        if (runtime.stableTimer) clearTimeout(runtime.stableTimer);
+        runtime.stableTimer = setTimeout(() => {
+          runtime.reconnectAttempts = 0;
+          runtime.conflictCount = 0;
+        }, STABLE_MS);
+        runtime.stableTimer.unref?.();
+      }
       await this.deps.accountRepo.update(accountId, {
         state: "connected",
         phone_number: phone,
@@ -316,11 +337,45 @@ export class BaileysManager {
     }
 
     if (u.connection === "close") {
+      if (runtime?.stableTimer) {
+        clearTimeout(runtime.stableTimer);
+        runtime.stableTimer = undefined;
+      }
       if (isLoggedOut(u.lastDisconnect?.error)) {
         this.runtimes.delete(accountId);
         await this.handleLoggedOut(accountId);
         return;
       }
+
+      // conflict/replaced (440): another client holds this WhatsApp session.
+      // Reconnecting just gets us replaced again, so cap the fight and STOP —
+      // a clean re-link (remove the other linked devices) is required to fix it.
+      if (statusCode === CONFLICT_STATUS && runtime) {
+        runtime.conflictCount += 1;
+        if (runtime.conflictCount >= MAX_CONFLICTS) {
+          runtime.stopped = true;
+          this.runtimes.delete(accountId);
+          runtime.socket.end();
+          await this.deps.accountRepo.update(accountId, {
+            state: "disconnected",
+            last_error:
+              "session replaced by another device — re-link required",
+            last_disconnected_at: new Date().toISOString(),
+          });
+          await this.deps.webhook.emit(
+            "account.disconnected",
+            accountId,
+            { reason: "session_replaced" },
+            "Session replaced — re-link required",
+          );
+          this.deps.logger?.error(
+            { accountId, conflictCount: runtime.conflictCount },
+            "stopping reconnect: WhatsApp session repeatedly replaced",
+          );
+          return;
+        }
+      }
+
       await this.deps.accountRepo.update(accountId, {
         state: "disconnected",
         last_disconnected_at: new Date().toISOString(),
